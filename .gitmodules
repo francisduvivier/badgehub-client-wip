@@ -7,3 +7,6 @@
 [submodule "FreeRTOS"]
 	path = FreeRTOS
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+[submodule "cJSON"]
+	path = cJSON
+	url = git@github.com:DaveGamble/cJSON.git
