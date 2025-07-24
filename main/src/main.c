@@ -12,7 +12,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #ifdef _MSC_VER
 #include <Windows.h>
 #else
@@ -21,29 +20,20 @@
 #endif
 #include "lvgl/lvgl.h"
 #include <SDL.h>
-#include <curl/curl.h>
-#include "cjson/cJSON.h"
+#include "badgehub_client.h" // Include our new client header
 
 /*********************
  * DEFINES
  *********************/
-#define BADGEHUB_API_URL "https://badgehub.p1m.nl/api/v3/projects"
 
 /**********************
  * TYPEDEFS
  **********************/
-// Struct to hold the response from curl
-struct MemoryStruct
-{
-    char *memory;
-    size_t size;
-};
 
 /**********************
  * STATIC PROTOTYPES
  **********************/
 static lv_display_t *hal_init(int32_t w, int32_t h);
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 
 /**********************
  * STATIC VARIABLES
@@ -75,65 +65,33 @@ int main(int argc, char **argv)
     /* Create a label that will be updated with the project count */
     lv_obj_t *label = lv_label_create(lv_screen_active());
     lv_label_set_text(label, "Fetching data...");
-    lv_obj_center(label);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0); // Use lv_obj_align for better control
 
-    CURL *curl_handle;
-    CURLcode res;
+    /* Force a redraw to show the "Fetching data..." message immediately */
+    lv_refr_now(NULL);
 
-    struct MemoryStruct chunk;
-    chunk.memory = malloc(1); /* will be grown as needed by the realloc above */
-    chunk.size = 0;           /* no data at this point */
+    /* Fetch the applications from the BadgeHub API */
+    int project_count = 0;
+    project_t *projects = get_applications(&project_count);
 
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl_handle = curl_easy_init();
-
-    if (curl_handle)
-    {
-        curl_easy_setopt(curl_handle, CURLOPT_URL, BADGEHUB_API_URL);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
-        curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-
-        res = curl_easy_perform(curl_handle);
-
-        char display_text[128];
-
-        if (res != CURLE_OK)
-        {
-            snprintf(display_text, sizeof(display_text), "HTTP request failed:\n%s", curl_easy_strerror(res));
-        }
-        else
-        {
-            cJSON *root = cJSON_Parse(chunk.memory);
-            if (root == NULL)
-            {
-                 snprintf(display_text, sizeof(display_text), "Error: Failed to parse JSON.");
-            }
-            else
-            {
-                if(cJSON_IsArray(root)) {
-                    int item_count = cJSON_GetArraySize(root);
-                    snprintf(display_text, sizeof(display_text), "BadgeHub Projects: %d", item_count);
-                } else {
-                    snprintf(display_text, sizeof(display_text), "Error: JSON is not an array.");
-                }
-                cJSON_Delete(root);
-            }
-        }
-
-        lv_label_set_text(label, display_text);
-        lv_obj_center(label);
-
-
-        curl_easy_cleanup(curl_handle);
-        free(chunk.memory);
+    /* Prepare the text to display */
+    char display_text[128];
+    if (projects != NULL) {
+        printf("Successfully fetched %d projects.\n", project_count);
+        snprintf(display_text, sizeof(display_text), "BadgeHub Projects: %d", project_count);
+        // We are done with the data, so free it
+        free_applications(projects, project_count);
+    } else {
+        printf("Failed to fetch projects.\n");
+        snprintf(display_text, sizeof(display_text), "Error: Failed to fetch projects.");
     }
 
-    curl_global_cleanup();
+    /* Update the label with the result */
+    lv_label_set_text(label, display_text);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
 
 #if LV_USE_OS == LV_OS_NONE
-
     while (1)
     {
         /* Periodically call the lv_task handler.
@@ -145,12 +103,9 @@ int main(int argc, char **argv)
         usleep(5 * 1000);
 #endif
     }
-
 #elif LV_USE_OS == LV_OS_FREERTOS
-
     /* Run FreeRTOS and create lvgl task */
     freertos_main();
-
 #endif
 
     return 0;
@@ -161,37 +116,11 @@ int main(int argc, char **argv)
  **********************/
 
 /**
- * libcurl callback to write received data into a memory buffer
- */
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
-    size_t realsize = size * nmemb;
-    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-
-    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
-    if (ptr == NULL)
-    {
-        /* out of memory! */
-        printf("not enough memory (realloc returned NULL)\n");
-        return 0;
-    }
-
-    mem->memory = ptr;
-    memcpy(&(mem->memory[mem->size]), contents, realsize);
-    mem->size += realsize;
-    mem->memory[mem->size] = 0;
-
-    return realsize;
-}
-
-
-/**
  * Initialize the Hardware Abstraction Layer (HAL) for the LVGL graphics
  * library
  */
 static lv_display_t *hal_init(int32_t w, int32_t h)
 {
-
     lv_group_set_default(lv_group_create());
 
     lv_display_t *disp = lv_sdl_window_create(w, h);
