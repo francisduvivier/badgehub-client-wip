@@ -32,7 +32,8 @@
 			"ios": "c",
 			"forward_list": "c",
 			"chrono": "c",
-			"list": "c"
+			"list": "c",
+			"cerrno": "c"
 		},
 	},
 	// tasks.json section
