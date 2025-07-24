@@ -3,6 +3,7 @@
 #include "badgehub_client.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
+#include <string.h> // Required for strncpy
 
 static void back_button_event_handler(lv_event_t * e) {
     // When the back button is clicked, recreate the app list view
@@ -10,6 +11,19 @@ static void back_button_event_handler(lv_event_t * e) {
 }
 
 void create_app_detail_view(const char* slug) {
+    // --- FIX ---
+    // Make a local copy of the slug *before* cleaning the screen.
+    // Cleaning the screen will free the memory of the original 'slug' pointer
+    // via the card's delete event handler.
+    char local_slug[256];
+    if (slug) {
+        strncpy(local_slug, slug, sizeof(local_slug) - 1);
+        local_slug[sizeof(local_slug) - 1] = '\0'; // Ensure null-termination
+    } else {
+        // If slug is somehow null, prevent a crash.
+        local_slug[0] = '\0';
+    }
+
     // Clear the screen before building the new view
     lv_obj_clean(lv_screen_active());
 
@@ -33,8 +47,8 @@ void create_app_detail_view(const char* slug) {
     lv_obj_align(loading_label, LV_ALIGN_CENTER, 0, 0);
     lv_refr_now(NULL); // Force redraw
 
-    // Fetch the project details
-    project_detail_t* details = get_project_details(slug);
+    // Fetch the project details using our safe, local copy of the slug
+    project_detail_t* details = get_project_details(local_slug);
 
     // We don't need the loading label anymore
     lv_obj_del(loading_label);

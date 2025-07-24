@@ -29,7 +29,10 @@
 			"lvgl.h": "c",
 			"cjson.h": "c",
 			"random": "cpp",
-			"ios": "c"
+			"ios": "c",
+			"forward_list": "c",
+			"chrono": "c",
+			"list": "c"
 		},
 	},
 	// tasks.json section

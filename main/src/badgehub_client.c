@@ -8,18 +8,21 @@
 #define BADGEHUB_API_BASE_URL "https://badgehub.p1m.nl/api/v3"
 
 // A struct to help curl write data into a dynamically growing memory buffer
-struct MemoryStruct {
+struct MemoryStruct
+{
     char *memory;
     size_t size;
 };
 
 // libcurl callback function to write received data into our MemoryStruct
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 
     char *ptr = realloc(mem->memory, mem->size + realsize + 1);
-    if (!ptr) {
+    if (!ptr)
+    {
         printf("not enough memory (realloc returned NULL)\n");
         return 0;
     }
@@ -33,33 +36,39 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 }
 
 // Helper function to safely extract a string from a cJSON object.
-static char* get_json_string(cJSON *json, const char *key) {
-    if (!json) return NULL;
+static char *get_json_string(cJSON *json, const char *key)
+{
+    if (!json)
+        return NULL;
     cJSON *item = cJSON_GetObjectItemCaseSensitive(json, key);
-    if (cJSON_IsString(item) && (item->valuestring != NULL)) {
+    if (cJSON_IsString(item) && (item->valuestring != NULL))
+    {
         char *str = malloc(strlen(item->valuestring) + 1);
-        if (str) {
+        if (str)
+        {
             strcpy(str, item->valuestring);
         }
         return str;
     }
     char *empty_str = malloc(1);
-    if(empty_str) *empty_str = '\0';
+    if (empty_str)
+        *empty_str = '\0';
     return empty_str;
 }
 
 // Implementation of the get_applications function
-project_t *get_applications(int *project_count) {
+project_t *get_applications(int *project_count)
+{
     *project_count = 0;
     CURL *curl_handle;
     CURLcode res;
-    struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
+    struct MemoryStruct chunk = {.memory = malloc(1), .size = 0};
     project_t *projects = NULL;
     char url[256];
     snprintf(url, sizeof(url), "%s/projects", BADGEHUB_API_BASE_URL);
 
-
-    if (chunk.memory == NULL) {
+    if (chunk.memory == NULL)
+    {
         fprintf(stderr, "Failed to allocate memory\n");
         return NULL;
     }
@@ -67,7 +76,8 @@ project_t *get_applications(int *project_count) {
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
 
-    if (!curl_handle) {
+    if (!curl_handle)
+    {
         free(chunk.memory);
         return NULL;
     }
@@ -79,22 +89,31 @@ project_t *get_applications(int *project_count) {
 
     res = curl_easy_perform(curl_handle);
 
-    if (res != CURLE_OK) {
+    if (res != CURLE_OK)
+    {
         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-    } else {
+    }
+    else
+    {
         cJSON *root = cJSON_Parse(chunk.memory);
-        if (root == NULL) {
+        if (root == NULL)
+        {
             const char *error_ptr = cJSON_GetErrorPtr();
-            if (error_ptr != NULL) {
+            if (error_ptr != NULL)
+            {
                 fprintf(stderr, "Error before: %s\n", error_ptr);
             }
-        } else if (cJSON_IsArray(root)) {
+        }
+        else if (cJSON_IsArray(root))
+        {
             *project_count = cJSON_GetArraySize(root);
             projects = malloc(*project_count * sizeof(project_t));
-            if (projects) {
+            if (projects)
+            {
                 cJSON *proj_json = NULL;
                 int i = 0;
-                cJSON_ArrayForEach(proj_json, root) {
+                cJSON_ArrayForEach(proj_json, root)
+                {
                     cJSON *id = cJSON_GetObjectItemCaseSensitive(proj_json, "id");
                     cJSON *is_public = cJSON_GetObjectItemCaseSensitive(proj_json, "public");
 
@@ -120,24 +139,28 @@ project_t *get_applications(int *project_count) {
 }
 
 // Implementation of the get_project_details function
-project_detail_t *get_project_details(const char *slug) {
+project_detail_t *get_project_details(const char *slug)
+{
     CURL *curl_handle;
     CURLcode res;
-    struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
+    struct MemoryStruct chunk = {.memory = malloc(1), .size = 0};
     project_detail_t *details = NULL;
     char url[256];
 
-    if (!slug) return NULL;
+    if (!slug)
+        return NULL;
     snprintf(url, sizeof(url), "%s/projects/%s", BADGEHUB_API_BASE_URL, slug);
 
-    if (chunk.memory == NULL) {
+    if (chunk.memory == NULL)
+    {
         fprintf(stderr, "Failed to allocate memory\n");
         return NULL;
     }
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
-    if (!curl_handle) {
+    if (!curl_handle)
+    {
         free(chunk.memory);
         return NULL;
     }
@@ -149,16 +172,22 @@ project_detail_t *get_project_details(const char *slug) {
 
     res = curl_easy_perform(curl_handle);
 
-    if (res != CURLE_OK) {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-    } else {
+    if (res != CURLE_OK)
+    {
+        fprintf(stderr, "curl_easy_perform(%s) failed: %s\n", url, curl_easy_strerror(res));
+    }
+    else
+    {
         cJSON *root = cJSON_Parse(chunk.memory);
-        if (root) {
+        if (root)
+        {
             details = malloc(sizeof(project_detail_t));
-            if (details) {
+            if (details)
+            {
                 // The interesting data is nested inside the 'version' and 'app_metadata' objects
                 cJSON *version_obj = cJSON_GetObjectItemCaseSensitive(root, "version");
-                if (version_obj) {
+                if (version_obj)
+                {
                     cJSON *metadata_obj = cJSON_GetObjectItemCaseSensitive(version_obj, "app_metadata");
                     details->name = get_json_string(metadata_obj, "name");
                     details->description = get_json_string(metadata_obj, "description");
@@ -178,10 +207,12 @@ project_detail_t *get_project_details(const char *slug) {
     return details;
 }
 
-
-void free_applications(project_t *projects, int count) {
-    if (!projects) return;
-    for (int i = 0; i < count; i++) {
+void free_applications(project_t *projects, int count)
+{
+    if (!projects)
+        return;
+    for (int i = 0; i < count; i++)
+    {
         free(projects[i].name);
         free(projects[i].slug);
         free(projects[i].description);
@@ -191,8 +222,10 @@ void free_applications(project_t *projects, int count) {
     free(projects);
 }
 
-void free_project_details(project_detail_t *details) {
-    if (!details) return;
+void free_project_details(project_detail_t *details)
+{
+    if (!details)
+        return;
     free(details->name);
     free(details->description);
     free(details->published_at);
