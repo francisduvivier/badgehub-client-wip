@@ -4,10 +4,6 @@
 #include "lvgl/lvgl.h"
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h> // For mkdir
-#include <errno.h>    // For errno
-
-#define INSTALLATION_DIR "installation_dir" // Define here as well for local use
 
 // --- FORWARD DECLARATIONS ---
 static void back_button_event_handler(lv_event_t * e);
@@ -103,19 +99,6 @@ static void install_button_event_handler(lv_event_t * e) {
     lv_obj_add_state(btn, LV_STATE_DISABLED);
     lv_label_set_text(status_label, "Starting installation...");
     lv_refr_now(NULL);
-
-    char project_dir_path[512];
-    snprintf(project_dir_path, sizeof(project_dir_path), "%s/%s", INSTALLATION_DIR, details->slug);
-    if (mkdir(INSTALLATION_DIR, 0755) != 0 && errno != EEXIST) {
-        lv_label_set_text_fmt(status_label, "Error: Could not create directory '%s'", INSTALLATION_DIR);
-        lv_obj_clear_state(btn, LV_STATE_DISABLED);
-        return;
-    }
-    if (mkdir(project_dir_path, 0755) != 0 && errno != EEXIST) {
-        lv_label_set_text_fmt(status_label, "Error: Could not create directory '%s'", project_dir_path);
-        lv_obj_clear_state(btn, LV_STATE_DISABLED);
-        return;
-    }
 
     bool all_successful = true;
     for (int i = 0; i < details->file_count; i++) {

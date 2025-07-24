@@ -33,7 +33,10 @@
 			"forward_list": "c",
 			"chrono": "c",
 			"list": "c",
-			"cerrno": "c"
+			"cerrno": "c",
+			"stat.h": "c",
+			"string.h": "c",
+			"errno.h": "c"
 		},
 	},
 	// tasks.json section
