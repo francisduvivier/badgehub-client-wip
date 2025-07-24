@@ -1,31 +1,35 @@
 #include "app_card.h"
-#include "app_detail.h" // Include the detail view header
+#include "app_detail.h"
 #include "lvgl/lvgl.h"
-#include <string.h> // For strdup
-#include <stdlib.h> // For free
+#include <string.h>
+#include <stdlib.h>
+
+// A struct to hold the data needed when a card is clicked.
+typedef struct {
+    char* slug;
+    int revision;
+} card_user_data_t;
 
 // Event handler for when a card is clicked
 static void card_click_event_handler(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_CLICKED) {
-        // Get the slug from the user data we attached to the card
-        char* slug = (char*)lv_event_get_user_data(e);
-        if (slug) {
-            // Create the detail view, passing the slug
-            create_app_detail_view(slug);
+        card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
+        if (user_data) {
+            // Create the detail view, passing the slug and revision
+            create_app_detail_view(user_data->slug, user_data->revision);
         }
     }
 }
 
-// Event handler for when a card is deleted
+// Event handler for when a card is deleted to free our custom user data
 static void card_delete_event_handler(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_DELETE) {
-        // Get the slug from the user data
-        char* slug = (char*)lv_event_get_user_data(e);
-        if (slug) {
-            // Free the memory we allocated for the slug copy
-            free(slug);
+        card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
+        if (user_data) {
+            free(user_data->slug); // Free the duplicated slug string
+            free(user_data);       // Free the struct itself
         }
     }
 }
@@ -37,13 +41,16 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
 
-    // IMPORTANT: The original project data will be freed. We must make a copy
-    // of the slug to use it safely in the event handler later.
-    char* slug_copy = strdup(project->slug);
+    // Create and populate the user data struct
+    card_user_data_t* user_data = malloc(sizeof(card_user_data_t));
+    if (user_data) {
+        user_data->slug = strdup(project->slug);
+        user_data->revision = project->revision;
+    }
 
     // Add the click and delete event handlers
-    lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, (void*)slug_copy);
-    lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, (void*)slug_copy);
+    lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
+    lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
 
     static lv_style_t style_title;
     lv_style_init(&style_title);

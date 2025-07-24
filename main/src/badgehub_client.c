@@ -10,6 +10,12 @@
 #define BADGEHUB_API_BASE_URL "https://badgehub.p1m.nl/api/v3"
 #define INSTALLATION_DIR "installation_dir" // The main directory for all installations
 
+// --- URL Templates ---
+#define PROJECTS_URL_TEMPLATE "%s/projects"
+#define PROJECT_DETAIL_URL_TEMPLATE "%s/projects/%s/rev%d"
+#define PROJECT_FILE_URL_TEMPLATE "%s/projects/%s/rev%d/files/%s"
+
+
 // --- FORWARD DECLARATIONS ---
 static void ensure_dir_exists(const char *path);
 
@@ -81,7 +87,7 @@ static void ensure_dir_exists(const char *path) {
 }
 
 
-// get_applications function (no changes)
+// get_applications function
 project_t *get_applications(int *project_count) {
     *project_count = 0;
     CURL *curl_handle;
@@ -89,7 +95,7 @@ project_t *get_applications(int *project_count) {
     struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
     project_t *projects = NULL;
     char url[256];
-    snprintf(url, sizeof(url), "%s/projects", BADGEHUB_API_BASE_URL);
+    snprintf(url, sizeof(url), PROJECTS_URL_TEMPLATE, BADGEHUB_API_BASE_URL);
 
     if (chunk.memory == NULL) return NULL;
     curl_global_init(CURL_GLOBAL_ALL);
@@ -111,12 +117,14 @@ project_t *get_applications(int *project_count) {
                 cJSON *proj_json = NULL;
                 int i = 0;
                 cJSON_ArrayForEach(proj_json, root) {
-                    projects[i].public = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(proj_json, "public"));
                     projects[i].name = get_json_string(proj_json, "name");
                     projects[i].slug = get_json_string(proj_json, "slug");
                     projects[i].description = get_json_string(proj_json, "description");
                     projects[i].project_url = get_json_string(proj_json, "project_url");
                     projects[i].icon_url = get_json_string(proj_json, "icon_url");
+
+                    cJSON *revision_item = cJSON_GetObjectItemCaseSensitive(proj_json, "revision");
+                    projects[i].revision = revision_item->valueint;
                     i++;
                 }
             }
@@ -129,8 +137,8 @@ project_t *get_applications(int *project_count) {
     return projects;
 }
 
-// get_project_details function (no changes)
-project_detail_t *get_project_details(const char *slug) {
+// get_project_details function
+project_detail_t *get_project_details(const char *slug, int revision) {
     CURL *curl_handle;
     CURLcode res;
     struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
@@ -138,8 +146,8 @@ project_detail_t *get_project_details(const char *slug) {
     char url[256];
 
     if (!slug) return NULL;
-    snprintf(url, sizeof(url), "%s/projects/%s", BADGEHUB_API_BASE_URL, slug);
-
+    snprintf(url, sizeof(url), PROJECT_DETAIL_URL_TEMPLATE, BADGEHUB_API_BASE_URL, slug, revision);
+    printf("get_project_details for url [%s]", url);
     if (chunk.memory == NULL) return NULL;
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
@@ -157,6 +165,7 @@ project_detail_t *get_project_details(const char *slug) {
             details = calloc(1, sizeof(project_detail_t));
             if (details) {
                 details->slug = strdup(slug);
+                details->revision = revision;
                 cJSON *version_obj = cJSON_GetObjectItemCaseSensitive(root, "version");
                 if (version_obj) {
                     cJSON *metadata_obj = cJSON_GetObjectItemCaseSensitive(version_obj, "app_metadata");
@@ -190,8 +199,8 @@ project_detail_t *get_project_details(const char *slug) {
     return details;
 }
 
-// Updated download_project_file function
-bool download_project_file(const char* slug, const project_file_t* file_info) {
+// download_project_file function
+bool download_project_file(const char* slug, int revision, const project_file_t* file_info) {
     CURL *curl_handle;
     CURLcode res;
     FILE *fp;
@@ -200,7 +209,7 @@ bool download_project_file(const char* slug, const project_file_t* file_info) {
     long response_code = 0;
     bool success = false;
 
-    snprintf(url, sizeof(url), "%s/projects/%s/files/%s", BADGEHUB_API_BASE_URL, slug, file_info->full_path);
+    snprintf(url, sizeof(url), PROJECT_FILE_URL_TEMPLATE, BADGEHUB_API_BASE_URL, slug, revision, file_info->full_path);
     snprintf(local_path, sizeof(local_path), "%s/%s/%s", INSTALLATION_DIR, slug, file_info->full_path);
 
     ensure_dir_exists(local_path);
@@ -235,7 +244,7 @@ bool download_project_file(const char* slug, const project_file_t* file_info) {
     return success;
 }
 
-// free_project_details function (no changes)
+// free_project_details function
 void free_project_details(project_detail_t *details) {
     if (!details) return;
     free(details->name);
@@ -254,7 +263,7 @@ void free_project_details(project_detail_t *details) {
     free(details);
 }
 
-// free_applications function (no changes)
+// free_applications function
 void free_applications(project_t *projects, int count) {
     if (!projects) return;
     for (int i = 0; i < count; i++) {
