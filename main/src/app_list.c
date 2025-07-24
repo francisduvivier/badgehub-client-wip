@@ -1,40 +1,36 @@
 #include "app_list.h"
+#include "app_card.h" // We now include the card module
 #include "badgehub_client.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
 
-/**
- * @brief Creates the main application view.
- *
- * This function is responsible for creating the initial user interface
- * that fetches and displays the project count from BadgeHub.
- */
 void create_app_list_view(void) {
-    /* Create a label that will be updated with the project count */
-    lv_obj_t *label = lv_label_create(lv_screen_active());
-    lv_label_set_text(label, "Fetching data...");
-    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-
-    /* Force a redraw to show the "Fetching data..." message immediately */
-    lv_refr_now(NULL);
+    /* Create a scrollable container for the list of cards */
+    lv_obj_t* list = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(list, lv_pct(100), lv_pct(100));
+    lv_obj_center(list);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     /* Fetch the applications from the BadgeHub API */
     int project_count = 0;
-    project_t *projects = get_applications(&project_count);
+    project_t* projects = get_applications(&project_count);
 
-    /* Prepare the text to display */
-    char display_text[128];
-    if (projects != NULL) {
-        printf("Successfully fetched %d projects.\n", project_count);
-        snprintf(display_text, sizeof(display_text), "BadgeHub Projects: %d", project_count);
+    if (projects != NULL && project_count > 0) {
+        printf("Successfully fetched %d projects. Creating cards...\n", project_count);
+
+        /* Loop through the projects and create a card for each one */
+        for (int i = 0; i < project_count; i++) {
+            create_app_card(list, &projects[i]);
+        }
+
         /* We are done with the data, so free it */
         free_applications(projects, project_count);
     } else {
+        /* If fetching fails, display an error message */
         printf("Failed to fetch projects.\n");
-        snprintf(display_text, sizeof(display_text), "Error: Failed to fetch projects.");
+        lv_obj_t* label = lv_label_create(list);
+        lv_label_set_text(label, "Error: Could not fetch projects from BadgeHub.");
+        lv_obj_center(label); // Center the label within the list container
     }
-
-    /* Update the label with the result */
-    lv_label_set_text(label, display_text);
-    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 }

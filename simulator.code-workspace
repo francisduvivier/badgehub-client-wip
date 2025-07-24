@@ -27,7 +27,9 @@
 		"files.associations": {
 			"glob.h": "c",
 			"lvgl.h": "c",
-			"cjson.h": "c"
+			"cjson.h": "c",
+			"random": "cpp",
+			"ios": "c"
 		},
 	},
 	// tasks.json section

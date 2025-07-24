@@ -5,7 +5,7 @@
 #include <curl/curl.h>
 #include "cjson/cJSON.h"
 
-#define BADGEHUB_API_URL "https://badgehub.p1m.nl/api/v3/projects"
+#define BADGEHUB_API_BASE_URL "https://badgehub.p1m.nl/api/v3"
 
 // A struct to help curl write data into a dynamically growing memory buffer
 struct MemoryStruct {
@@ -20,7 +20,6 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
     char *ptr = realloc(mem->memory, mem->size + realsize + 1);
     if (!ptr) {
-        /* out of memory! */
         printf("not enough memory (realloc returned NULL)\n");
         return 0;
     }
@@ -34,8 +33,8 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 }
 
 // Helper function to safely extract a string from a cJSON object.
-// The returned string is dynamically allocated and must be freed by the caller.
 static char* get_json_string(cJSON *json, const char *key) {
+    if (!json) return NULL;
     cJSON *item = cJSON_GetObjectItemCaseSensitive(json, key);
     if (cJSON_IsString(item) && (item->valuestring != NULL)) {
         char *str = malloc(strlen(item->valuestring) + 1);
@@ -44,7 +43,6 @@ static char* get_json_string(cJSON *json, const char *key) {
         }
         return str;
     }
-    // Return an empty string if the key is not found or not a string
     char *empty_str = malloc(1);
     if(empty_str) *empty_str = '\0';
     return empty_str;
@@ -57,6 +55,9 @@ project_t *get_applications(int *project_count) {
     CURLcode res;
     struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
     project_t *projects = NULL;
+    char url[256];
+    snprintf(url, sizeof(url), "%s/projects", BADGEHUB_API_BASE_URL);
+
 
     if (chunk.memory == NULL) {
         fprintf(stderr, "Failed to allocate memory\n");
@@ -71,7 +72,7 @@ project_t *get_applications(int *project_count) {
         return NULL;
     }
 
-    curl_easy_setopt(curl_handle, CURLOPT_URL, BADGEHUB_API_URL);
+    curl_easy_setopt(curl_handle, CURLOPT_URL, url);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
     curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "lvgl-badgehub-client/1.0");
@@ -118,7 +119,66 @@ project_t *get_applications(int *project_count) {
     return projects;
 }
 
-// Implementation of the free_applications function
+// Implementation of the get_project_details function
+project_detail_t *get_project_details(const char *slug) {
+    CURL *curl_handle;
+    CURLcode res;
+    struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
+    project_detail_t *details = NULL;
+    char url[256];
+
+    if (!slug) return NULL;
+    snprintf(url, sizeof(url), "%s/projects/%s", BADGEHUB_API_BASE_URL, slug);
+
+    if (chunk.memory == NULL) {
+        fprintf(stderr, "Failed to allocate memory\n");
+        return NULL;
+    }
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl_handle = curl_easy_init();
+    if (!curl_handle) {
+        free(chunk.memory);
+        return NULL;
+    }
+
+    curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
+    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "lvgl-badgehub-client/1.0");
+
+    res = curl_easy_perform(curl_handle);
+
+    if (res != CURLE_OK) {
+        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+    } else {
+        cJSON *root = cJSON_Parse(chunk.memory);
+        if (root) {
+            details = malloc(sizeof(project_detail_t));
+            if (details) {
+                // The interesting data is nested inside the 'version' and 'app_metadata' objects
+                cJSON *version_obj = cJSON_GetObjectItemCaseSensitive(root, "version");
+                if (version_obj) {
+                    cJSON *metadata_obj = cJSON_GetObjectItemCaseSensitive(version_obj, "app_metadata");
+                    details->name = get_json_string(metadata_obj, "name");
+                    details->description = get_json_string(metadata_obj, "description");
+                    details->author = get_json_string(metadata_obj, "author");
+                    details->version = get_json_string(metadata_obj, "version");
+                    details->published_at = get_json_string(version_obj, "published_at");
+                }
+            }
+            cJSON_Delete(root);
+        }
+    }
+
+    curl_easy_cleanup(curl_handle);
+    free(chunk.memory);
+    curl_global_cleanup();
+
+    return details;
+}
+
+
 void free_applications(project_t *projects, int count) {
     if (!projects) return;
     for (int i = 0; i < count; i++) {
@@ -129,4 +189,14 @@ void free_applications(project_t *projects, int count) {
         free(projects[i].icon_url);
     }
     free(projects);
+}
+
+void free_project_details(project_detail_t *details) {
+    if (!details) return;
+    free(details->name);
+    free(details->description);
+    free(details->published_at);
+    free(details->author);
+    free(details->version);
+    free(details);
 }

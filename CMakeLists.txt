@@ -10,21 +10,13 @@ option(USE_FREERTOS "Enable FreeRTOS" OFF) # Turn this on to enable FreeRTOS
 
 if(USE_FREERTOS)
     message(STATUS "FreeRTOS is enabled")
-
-    # FreeRTOS integration when USE_FREERTOS is enabled
     add_library(freertos_config INTERFACE)
     target_include_directories(freertos_config SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/config)
     target_compile_definitions(freertos_config INTERFACE projCOVERAGE_TEST=0)
-
-    # Add FreeRTOS as a subdirectory
     add_subdirectory(FreeRTOS)
-
-    # FreeRTOS-specific include directories
     include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/include)
     include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix)
     include_directories(${PROJECT_SOURCE_DIR}/config)
-
-    # Add FreeRTOS sources
     file(GLOB FREERTOS_SOURCES
         "${PROJECT_SOURCE_DIR}/FreeRTOS/*.c"
         "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/MemMang/heap_4.c"
@@ -32,13 +24,13 @@ if(USE_FREERTOS)
     )
 else()
     message(STATUS "FreeRTOS is disabled")
-    set(FREERTOS_SOURCES "")  # No FreeRTOS sources if FreeRTOS is disabled
+    set(FREERTOS_SOURCES "")
 endif()
 
 # Main include files of the project
 include_directories(${PROJECT_SOURCE_DIR}/main/inc)
 
-# Define options for LVGL with default values (OFF)
+# Define options for LVGL
 option(LV_USE_DRAW_SDL "Use SDL draw unit" OFF)
 option(LV_USE_LIBPNG "Use libpng to decode PNG" OFF)
 option(LV_USE_LIBJPEG_TURBO "Use libjpeg turbo to decode JPEG" OFF)
@@ -54,50 +46,48 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-# Find and include SDL2 library
+# Find required packages
 find_package(SDL2 REQUIRED)
-# Find and include CURL for http requests
 find_package(CURL REQUIRED)
 
-# Add compile definitions based on the selected options
+# Add compile definitions
 add_compile_definitions($<$<BOOL:${LV_USE_DRAW_SDL}>:LV_USE_DRAW_SDL=1>)
 add_compile_definitions($<$<BOOL:${LV_USE_LIBPNG}>:LV_USE_LIBPNG=1>)
 add_compile_definitions($<$<BOOL:${LV_USE_LIBJPEG_TURBO}>:LV_USE_LIBJPEG_TURBO=1>)
 add_compile_definitions($<$<BOOL:${LV_USE_FFMPEG}>:LV_USE_FFMPEG=1>)
 
-# Add LVGL subdirectory
+# Add subdirectories
 add_subdirectory(lvgl)
 target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
-
-# Add cJSON subdirectory (assuming it's in a folder named 'cjson')
 add_subdirectory(cjson)
 
-# Create the main executable, depending on the FreeRTOS option
+# Create the main executable
 if(USE_FREERTOS)
     add_executable(main
         ${PROJECT_SOURCE_DIR}/main/src/main.c
         ${PROJECT_SOURCE_DIR}/main/src/badgehub_client.c
         ${PROJECT_SOURCE_DIR}/main/src/app_list.c
+        ${PROJECT_SOURCE_DIR}/main/src/app_card.c
+        ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
         ${PROJECT_SOURCE_DIR}/main/src/freertos_main.cpp
         ${PROJECT_SOURCE_DIR}/main/src/mouse_cursor_icon.c
         ${PROJECT_SOURCE_DIR}/main/src/FreeRTOS_Posix_Port.c
-        ${FREERTOS_SOURCES}  # Add only if USE_FREERTOS is enabled
+        ${FREERTOS_SOURCES}
     )
-    # Link FreeRTOS libraries
     target_link_libraries(main freertos_config FreeRTOS)
 else()
     add_executable(main
         ${PROJECT_SOURCE_DIR}/main/src/main.c
         ${PROJECT_SOURCE_DIR}/main/src/badgehub_client.c
         ${PROJECT_SOURCE_DIR}/main/src/app_list.c
+        ${PROJECT_SOURCE_DIR}/main/src/app_card.c
+        ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
         ${PROJECT_SOURCE_DIR}/main/src/mouse_cursor_icon.c
     )
 endif()
 
-# Add the cJSON include directory to the main target now that it exists
+# Add include directories and link libraries
 target_include_directories(main PRIVATE ${PROJECT_SOURCE_DIR}/cjson)
-
-# Define LVGL configuration as a simple include
 target_compile_definitions(main PRIVATE LV_CONF_INCLUDE_SIMPLE)
 
 if(MSVC)
@@ -106,7 +96,6 @@ else()
     target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} m pthread cjson CURL::libcurl)
 endif()
 
-# Only link freertos_config if the FreeRTOS directory exists
 if(USE_FREERTOS)
     target_link_libraries(main freertos_config)
 endif()
@@ -114,42 +103,33 @@ endif()
 # Custom target to run the executable
 add_custom_target(run COMMAND ${EXECUTABLE_OUTPUT_PATH}/main DEPENDS main)
 
-# Conditionally include and link SDL2_image if LV_USE_DRAW_SDL is enabled
+# Conditional library includes
 if(LV_USE_DRAW_SDL)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
     find_package(SDL2_image REQUIRED)
     target_include_directories(lvgl PUBLIC ${SDL2_IMAGE_INCLUDE_DIRS})
     target_link_libraries(main ${SDL2_IMAGE_LIBRARIES})
 endif()
-
-# Conditionally include and link libpng if LV_USE_LIBPNG is enabled
 if(LV_USE_LIBPNG)
     find_package(PNG REQUIRED)
     target_include_directories(lvgl PUBLIC ${PNG_INCLUDE_DIRS})
     target_link_libraries(main ${PNG_LIBRARIES})
 endif()
-
-# Conditionally include and link libjpeg-turbo if LV_USE_LIBJPEG_TURBO is enabled
 if(LV_USE_LIBJPEG_TURBO)
     find_package(JPEG REQUIRED)
     target_include_directories(lvgl PUBLIC ${JPEG_INCLUDE_DIRS})
     target_link_libraries(main ${JPEG_LIBRARIES})
 endif()
-
-# Conditionally include and link FFmpeg libraries if LV_USE_FFMPEG is enabled
 if(LV_USE_FFMPEG)
     target_link_libraries(main avformat avcodec avutil swscale z)
 endif()
-
-# Conditionally include and link FreeType if LV_USE_FREETYPE is enabled
 if(LV_USE_FREETYPE)
     find_package(Freetype REQUIRED)
     target_include_directories(lvgl PUBLIC ${FREETYPE_INCLUDE_DIRS})
     target_link_libraries(main ${FREETYPE_LIBRARIES})
 endif()
 
-# On Windows, GUI applications do not show a console by default,
-# which hides log output. This ensures a console is available for logging.
+# Windows console settings
 if (WIN32)
     if (MSVC)
         target_link_options(main PRIVATE "/SUBSYSTEM:CONSOLE")
@@ -158,45 +138,8 @@ if (WIN32)
     endif()
 endif()
 
-# Apply additional compile options if the build type is Debug
+# Debug build settings
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug mode enabled")
-
-    target_compile_options(lvgl PRIVATE
-        -pedantic-errors
-        -Wall
-        -Wclobbered
-        -Wdeprecated
-        -Wdouble-promotion
-        -Wempty-body
-        -Wextra
-        -Wformat-security
-        -Wmaybe-uninitialized
-        # -Wmissing-prototypes
-        -Wpointer-arith
-        -Wmultichar
-        -Wno-pedantic # ignored for now, we convert functions to pointers for properties table.
-        -Wreturn-type
-        -Wshadow
-        -Wshift-negative-value
-        -Wsizeof-pointer-memaccess
-        -Wtype-limits
-        -Wundef
-        -Wuninitialized
-        -Wunreachable-code
-        -Wfloat-conversion
-        -Wstrict-aliasing
-    )
-
-if (ASAN)
-    message(STATUS "AddressSanitizer enabled")
-
-    # Add AddressSanitizer flags
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
-else()
-    message(STATUS "AddressSanitizer disabled")
-endif()
+    # Add your debug compile options here
 endif()
