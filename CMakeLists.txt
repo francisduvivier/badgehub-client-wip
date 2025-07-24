@@ -56,6 +56,8 @@ set(WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Find and include SDL2 library
 find_package(SDL2 REQUIRED)
+# Find and include CURL for http requests
+find_package(CURL REQUIRED)
 
 # Add compile definitions based on the selected options
 add_compile_definitions($<$<BOOL:${LV_USE_DRAW_SDL}>:LV_USE_DRAW_SDL=1>)
@@ -66,6 +68,9 @@ add_compile_definitions($<$<BOOL:${LV_USE_FFMPEG}>:LV_USE_FFMPEG=1>)
 # Add LVGL subdirectory
 add_subdirectory(lvgl)
 target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
+
+# Add cJSON subdirectory (assuming it's in a folder named 'cjson')
+add_subdirectory(cjson)
 
 # Create the main executable, depending on the FreeRTOS option
 if(USE_FREERTOS)
@@ -85,13 +90,16 @@ else()
     )
 endif()
 
+# Add the cJSON include directory to the main target now that it exists
+target_include_directories(main PRIVATE ${PROJECT_SOURCE_DIR}/cjson)
+
 # Define LVGL configuration as a simple include
 target_compile_definitions(main PRIVATE LV_CONF_INCLUDE_SIMPLE)
 
 if(MSVC)
-    target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES})
+    target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} cjson CURL::libcurl)
 else()
-    target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} m pthread)
+    target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} m pthread cjson CURL::libcurl)
 endif()
 
 # Only link freertos_config if the FreeRTOS directory exists
