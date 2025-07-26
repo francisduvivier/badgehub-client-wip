@@ -69,9 +69,9 @@ if(USE_FREERTOS)
         ${PROJECT_SOURCE_DIR}/main/src/app_list.c
         ${PROJECT_SOURCE_DIR}/main/src/app_card.c
         ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
-        ${PROJECT_SOURCE_DIR}/main/src/freertos_main.cpp
+            main/src/freertos/freertos_main.cpp
         ${PROJECT_SOURCE_DIR}/main/src/mouse_cursor_icon.c
-        ${PROJECT_SOURCE_DIR}/main/src/FreeRTOS_Posix_Port.c
+            main/src/freertos/FreeRTOS_Posix_Port.c
         ${FREERTOS_SOURCES}
     )
     target_link_libraries(main freertos_config FreeRTOS)
