@@ -65,7 +65,7 @@ add_subdirectory(cjson)
 if(USE_FREERTOS)
     add_executable(main
         ${PROJECT_SOURCE_DIR}/main/src/main.c
-        ${PROJECT_SOURCE_DIR}/main/src/badgehub_client.c
+            main/src/badgehub_client/badgehub_client.c
         ${PROJECT_SOURCE_DIR}/main/src/app_list.c
         ${PROJECT_SOURCE_DIR}/main/src/app_card.c
         ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
@@ -78,7 +78,7 @@ if(USE_FREERTOS)
 else()
     add_executable(main
         ${PROJECT_SOURCE_DIR}/main/src/main.c
-        ${PROJECT_SOURCE_DIR}/main/src/badgehub_client.c
+            main/src/badgehub_client/badgehub_client.c
         ${PROJECT_SOURCE_DIR}/main/src/app_list.c
         ${PROJECT_SOURCE_DIR}/main/src/app_card.c
         ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file

@@ -1,6 +1,6 @@
 #include "app_list.h"
 #include "app_card.h" // We now include the card module
-#include "badgehub_client.h"
+#include "badgehub_client/badgehub_client.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
 

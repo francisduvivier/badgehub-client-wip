@@ -1,6 +1,6 @@
 #include "app_detail.h"
 #include "app_list.h"
-#include "badgehub_client.h"
+#include "badgehub_client/badgehub_client.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
 #include <string.h>
