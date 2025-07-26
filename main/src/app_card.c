@@ -1,6 +1,6 @@
 #include "app_card.h"
 #include "app_detail.h"
-#include "app_home.h" // Include to get access to the search bar
+#include "app_home.h" // Still needed for the back-navigation from the detail page
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
@@ -13,15 +13,23 @@ typedef struct {
 // --- FORWARD DECLARATIONS ---
 static void card_click_event_handler(lv_event_t * e);
 static void card_delete_event_handler(lv_event_t * e);
-static void card_key_event_handler(lv_event_t * e); // New handler for key presses
+// The key event handler has been removed from this file.
 
 // --- IMPLEMENTATIONS ---
 
 void create_app_card(lv_obj_t* parent, const project_t* project) {
+    // --- NEW: Add styles for focused state ---
+    static lv_style_t style_focused;
+    lv_style_init(&style_focused);
+    lv_style_set_border_color(&style_focused, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_border_width(&style_focused, 2);
+
     lv_obj_t* card = lv_obj_create(parent);
     lv_obj_set_size(card, lv_pct(95), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    // Apply the focused style when the card is in the focused state
+    lv_obj_add_style(card, &style_focused, LV_STATE_FOCUSED);
 
     card_user_data_t* user_data = malloc(sizeof(card_user_data_t));
     if (user_data) {
@@ -31,7 +39,7 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
 
     lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
     lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
-    lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL); // Add key handler
+    // The key event handler is no longer added here.
 
     // Add the card to the default group to make it focusable
     lv_group_add_obj(lv_group_get_default(), card);
@@ -66,22 +74,5 @@ static void card_delete_event_handler(lv_event_t * e) {
     if (user_data) {
         free(user_data->slug);
         free(user_data);
-    }
-}
-
-// New handler to manage focus wrapping from the list back to the search bar
-static void card_key_event_handler(lv_event_t * e) {
-    uint32_t key = lv_indev_get_key(lv_indev_active());
-    lv_obj_t * card = lv_event_get_target(e);
-    lv_obj_t * parent = lv_obj_get_parent(card);
-
-    // CORRECTED: Use lv_obj_get_index() instead of lv_obj_get_child_id()
-    // If UP is pressed on the very first card, focus the search bar
-    if (key == LV_KEY_UP && lv_obj_get_index(card) == 0) {
-        lv_group_focus_obj(get_search_bar());
-    }
-    // If DOWN is pressed on the very last card, focus the search bar
-    else if (key == LV_KEY_DOWN && lv_obj_get_index(card) == lv_obj_get_child_cnt(parent) - 1) {
-        lv_group_focus_obj(get_search_bar());
     }
 }
