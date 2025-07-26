@@ -20,7 +20,7 @@
 #endif
 #include "lvgl/lvgl.h"
 #include <SDL.h>
-#include "app_list.h" // Include our new UI module header
+#include "lvgl_components/app_list.h"
 
 /*********************
  * DEFINES

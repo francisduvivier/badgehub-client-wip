@@ -66,9 +66,9 @@ if(USE_FREERTOS)
     add_executable(main
         ${PROJECT_SOURCE_DIR}/main/src/main.c
             main/src/badgehub_client/badgehub_client.c
-        ${PROJECT_SOURCE_DIR}/main/src/app_list.c
-        ${PROJECT_SOURCE_DIR}/main/src/app_card.c
-        ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
+            main/src/lvgl_components/app_list.c
+            main/src/lvgl_components/app_card.c
+            main/src/lvgl_components/app_detail.c # Add our new detail source file
             main/src/freertos/freertos_main.cpp
         ${PROJECT_SOURCE_DIR}/main/src/mouse_cursor_icon.c
             main/src/freertos/FreeRTOS_Posix_Port.c
@@ -79,9 +79,9 @@ else()
     add_executable(main
         ${PROJECT_SOURCE_DIR}/main/src/main.c
             main/src/badgehub_client/badgehub_client.c
-        ${PROJECT_SOURCE_DIR}/main/src/app_list.c
-        ${PROJECT_SOURCE_DIR}/main/src/app_card.c
-        ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
+            main/src/lvgl_components/app_list.c
+            main/src/lvgl_components/app_card.c
+            main/src/lvgl_components/app_detail.c # Add our new detail source file
     )
 endif()
 
