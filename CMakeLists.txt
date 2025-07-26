@@ -82,7 +82,6 @@ else()
         ${PROJECT_SOURCE_DIR}/main/src/app_list.c
         ${PROJECT_SOURCE_DIR}/main/src/app_card.c
         ${PROJECT_SOURCE_DIR}/main/src/app_detail.c # Add our new detail source file
-        ${PROJECT_SOURCE_DIR}/main/src/mouse_cursor_icon.c
     )
 endif()
 
