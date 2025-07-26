@@ -75,7 +75,7 @@ static void card_delete_event_handler(lv_event_t * e) {
 }
 
 /**
- * @brief Handles key events for a single card, managing focus navigation.
+ * @brief Handles key events for a single card, managing focus navigation and scrolling.
  */
 static void card_key_event_handler(lv_event_t * e) {
     uint32_t key = lv_indev_get_key(lv_indev_active());
@@ -92,6 +92,8 @@ static void card_key_event_handler(lv_event_t * e) {
             // Focus the previous card (sibling) in the list
             lv_obj_t * prev_card = lv_obj_get_child(parent, current_index - 1);
             lv_group_focus_obj(prev_card);
+            // --- NEW: Scroll the newly focused card into view ---
+            lv_obj_scroll_to_view(prev_card, LV_ANIM_ON);
         }
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
@@ -101,6 +103,8 @@ static void card_key_event_handler(lv_event_t * e) {
             // Focus the next card (sibling) in the list
             lv_obj_t * next_card = lv_obj_get_child(parent, current_index + 1);
             lv_group_focus_obj(next_card);
+            // --- NEW: Scroll the newly focused card into view ---
+            lv_obj_scroll_to_view(next_card, LV_ANIM_ON);
         }
     }
 }
