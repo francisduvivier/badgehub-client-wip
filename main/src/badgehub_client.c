@@ -12,6 +12,7 @@
 
 // --- URL Templates ---
 #define PROJECTS_URL_TEMPLATE "%s/projects"
+// CORRECTED: Restored "rev" to the URL template as per your instruction
 #define PROJECT_DETAIL_URL_TEMPLATE "%s/projects/%s/rev%d"
 #define PROJECT_FILE_URL_TEMPLATE "%s/projects/%s/rev%d/files/%s"
 
