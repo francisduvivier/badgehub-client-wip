@@ -35,7 +35,7 @@ static void list_key_event_handler(lv_event_t *e) {
     lv_obj_t *list = lv_event_get_target(e);
 
     // Ensure the focused object is actually a card within this list
-    if (lv_obj_get_parent(focused) != list) {
+    if (!focused || lv_obj_get_parent(focused) != list) {
         return;
     }
 
@@ -44,16 +44,16 @@ static void list_key_event_handler(lv_event_t *e) {
         if (lv_obj_get_index(focused) == 0) {
             lv_group_focus_obj(get_search_bar());
         } else {
-            // Otherwise, just focus the previous object in the group
-            lv_group_focus_prev(g);
+            // This is more reliable than lv_group_focus_prev() and behaves like Shift+Tab.
+            lv_group_send_data(g, LV_KEY_PREV);
         }
     } else if (key == LV_KEY_DOWN) {
         // If the focused card is the last one, jump to the search bar
         if (lv_obj_get_index(focused) == lv_obj_get_child_cnt(list) - 1) {
             lv_group_focus_obj(get_search_bar());
         } else {
-            // Otherwise, just focus the next object in the group
-            lv_group_focus_next(g);
+            // This makes the DOWN key behave exactly like the TAB key for focus changes.
+            lv_group_send_data(g, LV_KEY_NEXT);
         }
     }
 }
