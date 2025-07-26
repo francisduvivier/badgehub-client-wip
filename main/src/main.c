@@ -47,10 +47,6 @@ static lv_display_t *hal_init(int32_t w, int32_t h);
  * GLOBAL FUNCTIONS
  **********************/
 
-#if LV_USE_OS == LV_OS_FREERTOS
-extern void freertos_main(void);
-#endif
-
 int main(int argc, char **argv)
 {
     (void)argc; /*Unused*/
@@ -78,9 +74,6 @@ int main(int argc, char **argv)
         usleep(5 * 1000);
 #endif
     }
-#elif LV_USE_OS == LV_OS_FREERTOS
-    /* Run FreeRTOS and create lvgl task */
-    freertos_main();
 #endif
 
     return 0;
