@@ -1,39 +1,21 @@
 #include "app_card.h"
 #include "app_detail.h"
+#include "app_home.h" // Include to get access to the search bar
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
 
-// A struct to hold the data needed when a card is clicked.
 typedef struct {
     char* slug;
     int revision;
 } card_user_data_t;
 
-// Event handler for when a card is clicked
-static void card_click_event_handler(lv_event_t * e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED) {
-        card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
-        if (user_data) {
-            // Create the detail view, passing the slug and revision
-            create_app_detail_view(user_data->slug, user_data->revision);
-        }
-    }
-}
+// --- FORWARD DECLARATIONS ---
+static void card_click_event_handler(lv_event_t * e);
+static void card_delete_event_handler(lv_event_t * e);
+static void card_key_event_handler(lv_event_t * e); // New handler for key presses
 
-// Event handler for when a card is deleted to free our custom user data
-static void card_delete_event_handler(lv_event_t * e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_DELETE) {
-        card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
-        if (user_data) {
-            free(user_data->slug); // Free the duplicated slug string
-            free(user_data);       // Free the struct itself
-        }
-    }
-}
-
+// --- IMPLEMENTATIONS ---
 
 void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_t* card = lv_obj_create(parent);
@@ -41,16 +23,18 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
 
-    // Create and populate the user data struct
     card_user_data_t* user_data = malloc(sizeof(card_user_data_t));
     if (user_data) {
         user_data->slug = strdup(project->slug);
         user_data->revision = project->revision;
     }
 
-    // Add the click and delete event handlers
     lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
     lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
+    lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL); // Add key handler
+
+    // Add the card to the default group to make it focusable
+    lv_group_add_obj(lv_group_get_default(), card);
 
     static lv_style_t style_title;
     lv_style_init(&style_title);
@@ -67,4 +51,37 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_label_set_long_mode(desc_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(desc_label, lv_pct(100));
     lv_obj_set_style_margin_top(desc_label, 5, 0);
+}
+
+
+static void card_click_event_handler(lv_event_t * e) {
+    card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
+    if (user_data) {
+        create_app_detail_view(user_data->slug, user_data->revision);
+    }
+}
+
+static void card_delete_event_handler(lv_event_t * e) {
+    card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
+    if (user_data) {
+        free(user_data->slug);
+        free(user_data);
+    }
+}
+
+// New handler to manage focus wrapping from the list back to the search bar
+static void card_key_event_handler(lv_event_t * e) {
+    uint32_t key = lv_indev_get_key(lv_indev_active());
+    lv_obj_t * card = lv_event_get_target(e);
+    lv_obj_t * parent = lv_obj_get_parent(card);
+
+    // CORRECTED: Use lv_obj_get_index() instead of lv_obj_get_child_id()
+    // If UP is pressed on the very first card, focus the search bar
+    if (key == LV_KEY_UP && lv_obj_get_index(card) == 0) {
+        lv_group_focus_obj(get_search_bar());
+    }
+    // If DOWN is pressed on the very last card, focus the search bar
+    else if (key == LV_KEY_DOWN && lv_obj_get_index(card) == lv_obj_get_child_cnt(parent) - 1) {
+        lv_group_focus_obj(get_search_bar());
+    }
 }
