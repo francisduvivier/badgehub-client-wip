@@ -1,32 +1,6 @@
 cmake_minimum_required(VERSION 3.12.4)
 project(lvgl C CXX)
 
-# Set the correct FreeRTOS port for your system (e.g., Posix for WSL)
-set(FREERTOS_PORT GCC_POSIX CACHE STRING "Port for FreeRTOS on Posix environment")
-
-unset(USE_FREERTOS CACHE)
-
-option(USE_FREERTOS "Enable FreeRTOS" OFF) # Turn this on to enable FreeRTOS
-
-if(USE_FREERTOS)
-    message(STATUS "FreeRTOS is enabled")
-    add_library(freertos_config INTERFACE)
-    target_include_directories(freertos_config SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/config)
-    target_compile_definitions(freertos_config INTERFACE projCOVERAGE_TEST=0)
-    add_subdirectory(FreeRTOS)
-    include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/include)
-    include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix)
-    include_directories(${PROJECT_SOURCE_DIR}/config)
-    file(GLOB FREERTOS_SOURCES
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/*.c"
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/MemMang/heap_4.c"
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix/*.c"
-    )
-else()
-    message(STATUS "FreeRTOS is disabled")
-    set(FREERTOS_SOURCES "")
-endif()
-
 # Main include files of the project
 include_directories(${PROJECT_SOURCE_DIR}/main/inc)
 
@@ -61,29 +35,15 @@ add_subdirectory(lvgl)
 target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
 add_subdirectory(cjson)
 
-# Create the main executable
-if(USE_FREERTOS)
-    add_executable(main
-        ${PROJECT_SOURCE_DIR}/main/src/main.c
-            main/src/badgehub_client/badgehub_client.c
-            main/src/lvgl_components/app_list.c
-            main/src/lvgl_components/app_card.c
-            main/src/lvgl_components/app_detail.c # Add our new detail source file
-            main/src/freertos/freertos_main.cpp
-        ${PROJECT_SOURCE_DIR}/main/src/mouse_cursor_icon.c
-            main/src/freertos/FreeRTOS_Posix_Port.c
-        ${FREERTOS_SOURCES}
-    )
-    target_link_libraries(main freertos_config FreeRTOS)
-else()
-    add_executable(main
-        ${PROJECT_SOURCE_DIR}/main/src/main.c
-            main/src/badgehub_client/badgehub_client.c
-            main/src/lvgl_components/app_list.c
-            main/src/lvgl_components/app_card.c
-            main/src/lvgl_components/app_detail.c # Add our new detail source file
-    )
-endif()
+
+add_executable(main
+    ${PROJECT_SOURCE_DIR}/main/src/main.c
+        main/src/badgehub_client.c
+        main/src/app_list.c
+        main/src/app_card.c
+        main/src/app_detail.c
+        main/src/app_home.c
+)
 
 # Add include directories and link libraries
 target_include_directories(main PRIVATE ${PROJECT_SOURCE_DIR}/cjson)
@@ -95,9 +55,6 @@ else()
     target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} m pthread cjson CURL::libcurl)
 endif()
 
-if(USE_FREERTOS)
-    target_link_libraries(main freertos_config)
-endif()
 
 # Custom target to run the executable
 add_custom_target(run COMMAND ${EXECUTABLE_OUTPUT_PATH}/main DEPENDS main)

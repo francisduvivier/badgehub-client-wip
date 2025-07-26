@@ -10,7 +10,7 @@ typedef struct {
     char *description;
     char *project_url;
     char *icon_url;
-    int revision; // The latest revision number of the project
+    int revision;
 } project_t;
 
 // Represents a single file within a project.
@@ -27,14 +27,14 @@ typedef struct {
     char *author;
     char *version;
     char *slug;
-    int revision; // The revision number for this specific detail view
+    int revision;
     project_file_t *files;
     int file_count;
 } project_detail_t;
 
 
-// Fetches the list of projects from the BadgeHub API.
-project_t *get_applications(int *project_count);
+// Fetches the list of projects, optionally filtered by a search query.
+project_t *get_applications(int *project_count, const char* search_query);
 
 // Frees the memory allocated for an array of project summaries.
 void free_applications(project_t *projects, int count);

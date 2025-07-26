@@ -1,5 +1,5 @@
-#include "./app_card.h"
-#include "./app_detail.h"
+#include "app_card.h"
+#include "app_detail.h"
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>

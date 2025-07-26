@@ -1,7 +1,7 @@
 #ifndef APP_CARD_H
 #define APP_CARD_H
 
-#include "../badgehub_client/badgehub_client.h"
+#include "badgehub_client.h"
 #include "lvgl/lvgl.h"
 
 /**

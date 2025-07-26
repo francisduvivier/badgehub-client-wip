@@ -8,7 +8,7 @@
 #include <errno.h>    // For errno
 
 #define BADGEHUB_API_BASE_URL "https://badgehub.p1m.nl/api/v3"
-#define INSTALLATION_DIR "installation_dir" // The main directory for all installations
+#define INSTALLATION_DIR "installation_dir"
 
 // --- URL Templates ---
 #define PROJECTS_URL_TEMPLATE "%s/projects"
@@ -86,21 +86,29 @@ static void ensure_dir_exists(const char *path) {
     free(path_copy);
 }
 
-
-// get_applications function
-project_t *get_applications(int *project_count) {
+project_t *get_applications(int *project_count, const char* search_query) {
     *project_count = 0;
     CURL *curl_handle;
     CURLcode res;
     struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
     project_t *projects = NULL;
-    char url[256];
+    char url[512];
+
+    // Build the base URL
     snprintf(url, sizeof(url), PROJECTS_URL_TEMPLATE, BADGEHUB_API_BASE_URL);
 
-    if (chunk.memory == NULL) return NULL;
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
     if (!curl_handle) { free(chunk.memory); return NULL; }
+
+    // If there's a search query, append it
+    if (search_query && strlen(search_query) > 0) {
+        char *escaped_query = curl_easy_escape(curl_handle, search_query, 0);
+        if (escaped_query) {
+            snprintf(url, sizeof(url), "%s/projects?q=%s", BADGEHUB_API_BASE_URL, escaped_query);
+            curl_free(escaped_query);
+        }
+    }
 
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -122,9 +130,8 @@ project_t *get_applications(int *project_count) {
                     projects[i].description = get_json_string(proj_json, "description");
                     projects[i].project_url = get_json_string(proj_json, "project_url");
                     projects[i].icon_url = get_json_string(proj_json, "icon_url");
-
                     cJSON *revision_item = cJSON_GetObjectItemCaseSensitive(proj_json, "revision");
-                    projects[i].revision = revision_item->valueint;
+                    projects[i].revision = cJSON_IsNumber(revision_item) ? revision_item->valueint : 0;
                     i++;
                 }
             }
@@ -137,28 +144,23 @@ project_t *get_applications(int *project_count) {
     return projects;
 }
 
-// get_project_details function
 project_detail_t *get_project_details(const char *slug, int revision) {
     CURL *curl_handle;
     CURLcode res;
     struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
     project_detail_t *details = NULL;
     char url[256];
-
     if (!slug) return NULL;
     snprintf(url, sizeof(url), PROJECT_DETAIL_URL_TEMPLATE, BADGEHUB_API_BASE_URL, slug, revision);
-    printf("get_project_details for url [%s]", url);
     if (chunk.memory == NULL) return NULL;
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
     if (!curl_handle) { free(chunk.memory); return NULL; }
-
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
     curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "lvgl-badgehub-client/1.0");
     res = curl_easy_perform(curl_handle);
-
     if (res == CURLE_OK) {
         cJSON *root = cJSON_Parse(chunk.memory);
         if (root) {
@@ -199,7 +201,6 @@ project_detail_t *get_project_details(const char *slug, int revision) {
     return details;
 }
 
-// download_project_file function
 bool download_project_file(const char* slug, int revision, const project_file_t* file_info) {
     CURL *curl_handle;
     CURLcode res;
@@ -208,12 +209,9 @@ bool download_project_file(const char* slug, int revision, const project_file_t*
     char local_path[512];
     long response_code = 0;
     bool success = false;
-
     snprintf(url, sizeof(url), PROJECT_FILE_URL_TEMPLATE, BADGEHUB_API_BASE_URL, slug, revision, file_info->full_path);
     snprintf(local_path, sizeof(local_path), "%s/%s/%s", INSTALLATION_DIR, slug, file_info->full_path);
-
     ensure_dir_exists(local_path);
-
     curl_handle = curl_easy_init();
     if (curl_handle) {
         fp = fopen(local_path, "wb");
@@ -222,16 +220,14 @@ bool download_project_file(const char* slug, int revision, const project_file_t*
             curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteFileCallback);
             curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, fp);
             res = curl_easy_perform(curl_handle);
-            fclose(fp); // Close the file regardless of the outcome
-
+            fclose(fp);
             if (res == CURLE_OK) {
-                // Check the HTTP response code
                 curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
                 if (response_code == 200) {
                     success = true;
                 } else {
                     fprintf(stderr, "Download failed for %s: HTTP status %ld\n", url, response_code);
-                    remove(local_path); // Clean up the empty/partial file on error
+                    remove(local_path);
                 }
             } else {
                 fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
@@ -244,7 +240,6 @@ bool download_project_file(const char* slug, int revision, const project_file_t*
     return success;
 }
 
-// free_project_details function
 void free_project_details(project_detail_t *details) {
     if (!details) return;
     free(details->name);
@@ -263,7 +258,6 @@ void free_project_details(project_detail_t *details) {
     free(details);
 }
 
-// free_applications function
 void free_applications(project_t *projects, int count) {
     if (!projects) return;
     for (int i = 0; i < count; i++) {
