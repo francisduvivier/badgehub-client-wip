@@ -12,7 +12,6 @@
 
 // --- URL Templates ---
 #define PROJECTS_URL_TEMPLATE "%s/projects"
-// CORRECTED: Restored "rev" to the URL template as per your instruction
 #define PROJECT_DETAIL_URL_TEMPLATE "%s/projects/%s/rev%d"
 #define PROJECT_FILE_URL_TEMPLATE "%s/projects/%s/rev%d/files/%s"
 
@@ -106,7 +105,7 @@ project_t *get_applications(int *project_count, const char* search_query) {
     if (search_query && strlen(search_query) > 0) {
         char *escaped_query = curl_easy_escape(curl_handle, search_query, 0);
         if (escaped_query) {
-            snprintf(url, sizeof(url), "%s/projects?q=%s", BADGEHUB_API_BASE_URL, escaped_query);
+            snprintf(url, sizeof(url), "%s/projects?search=%s", BADGEHUB_API_BASE_URL, escaped_query);
             curl_free(escaped_query);
         }
     }
