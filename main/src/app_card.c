@@ -77,7 +77,6 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            // If on the first card, request the previous page
             data_manager_request_previous_page();
             return;
         } else {
@@ -85,14 +84,14 @@ static void card_key_event_handler(lv_event_t * e) {
         }
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
-            // If on the last card, request the next page
             data_manager_request_next_page();
             return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
     } else if (key >= ' ' && key < LV_KEY_DEL) {
-        // app_home_focus_search_and_start_typing(key); // TODO
+        // UNCOMMENTED: This now works.
+        app_home_focus_search_and_start_typing(key);
         return;
     }
 

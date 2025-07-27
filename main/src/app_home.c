@@ -1,6 +1,6 @@
 #include "app_home.h"
 #include "app_list.h"
-#include "app_data_manager.h" // Include the new data manager
+#include "app_data_manager.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
 
@@ -22,9 +22,29 @@ lv_obj_t* get_search_bar(void) {
     return search_bar;
 }
 
+/**
+ * @brief Implements the function to focus the search bar and start typing.
+ */
+void app_home_focus_search_and_start_typing(uint32_t key) {
+    if (search_bar) {
+        // Focus the search bar
+        lv_group_focus_obj(search_bar);
+
+        // Convert the key to a string
+        char key_str[2] = {(char)key, '\0'};
+
+        // Clear existing text and add the new character
+        lv_textarea_set_text(search_bar, key_str);
+
+        // Move the cursor to the end of the text
+        lv_textarea_set_cursor_pos(search_bar, lv_textarea_get_cursor_pos(search_bar) + 1);
+    }
+}
+
+
 void create_app_home_view(void) {
     lv_obj_clean(lv_screen_active());
-    data_manager_init(); // Initialize the data manager's state
+    data_manager_init();
 
     lv_obj_t *main_container = lv_obj_create(lv_screen_active());
     lv_obj_set_size(main_container, lv_pct(100), lv_pct(100));
@@ -51,7 +71,6 @@ void create_app_home_view(void) {
     lv_obj_set_width(page_indicator_label, lv_pct(95));
     lv_obj_set_style_text_align(page_indicator_label, LV_TEXT_ALIGN_CENTER, 0);
 
-    // Initial data load is now a single call to the data manager
     data_manager_fetch_page(list_container, page_indicator_label, search_bar, 0, false);
 }
 
@@ -62,14 +81,12 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
     } else if (key == LV_KEY_UP) {
-        // Delegate to the data manager
         data_manager_request_previous_page();
     }
 }
 
 static void search_timer_cb(lv_timer_t *timer) {
     printf("Search timer fired. Starting new search...\n");
-    // Delegate to the data manager
     data_manager_start_new_search();
     search_timer = NULL;
 }
@@ -85,6 +102,6 @@ static void home_view_delete_event_cb(lv_event_t *e) {
         lv_timer_del(search_timer);
         search_timer = NULL;
     }
-    data_manager_deinit(); // Clean up the data manager
+    data_manager_deinit();
     search_bar = NULL;
 }
