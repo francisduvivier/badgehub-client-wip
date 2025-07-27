@@ -74,17 +74,22 @@ static void card_key_event_handler(lv_event_t * e) {
     uint32_t child_count = lv_obj_get_child_cnt(parent);
     lv_obj_t* new_focus_target = NULL;
 
+    // Check if the search bar is the first child
+    bool search_bar_is_present = (lv_obj_get_child(parent, 0) == get_search_bar());
+
     if (key == LV_KEY_UP) {
-        if (current_index == 0) {
-            new_focus_target = get_search_bar();
+        // If the search bar is present and this is the first card, focus the search bar.
+        // Otherwise, if this is the first card (index 0), trigger previous page.
+        if ((search_bar_is_present && current_index == 1) || (!search_bar_is_present && current_index == 0)) {
+            app_home_show_previous_page();
+            return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index - 1);
         }
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
-            // At the end of the list, trigger next page load
             app_home_show_next_page();
-            return; // Don't continue with focus logic, page change will handle it
+            return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
