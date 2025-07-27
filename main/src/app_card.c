@@ -1,7 +1,6 @@
 #include "app_card.h"
 #include "app_detail.h"
 #include "app_home.h"
-#include "app_data_manager.h" // Include the new data manager
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
@@ -77,20 +76,19 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            data_manager_request_previous_page();
-            return;
+            // If we are the first card, always try to focus the search bar
+            new_focus_target = get_search_bar();
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index - 1);
         }
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
-            data_manager_request_next_page();
+            app_home_show_next_page();
             return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
     } else if (key >= ' ' && key < LV_KEY_DEL) {
-        // UNCOMMENTED: This now works.
         app_home_focus_search_and_start_typing(key);
         return;
     }

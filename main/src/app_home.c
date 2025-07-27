@@ -1,20 +1,32 @@
 #include "app_home.h"
 #include "app_list.h"
-#include "app_data_manager.h"
+#include "badgehub_client.h"
+#include "app_card.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-// --- STATIC UI VARIABLES ---
+// --- CONSTANTS ---
+#define ITEMS_PER_PAGE 20
+
+// --- STATIC STATE VARIABLES ---
 static lv_obj_t *list_container;
 static lv_obj_t *search_bar;
 static lv_obj_t *page_indicator_label;
 static lv_timer_t *search_timer = NULL;
+
+static int current_offset = 0;
+static bool is_fetching = false;
+static bool end_of_list_reached = false;
+static int total_pages = -1;
 
 // --- FORWARD DECLARATIONS ---
 static void search_timer_cb(lv_timer_t *timer);
 static void search_bar_event_cb(lv_event_t *e);
 static void search_bar_key_event_cb(lv_event_t *e);
 static void home_view_delete_event_cb(lv_event_t *e);
+static void fetch_and_display_page(int offset, bool focus_last);
 
 // --- IMPLEMENTATIONS ---
 
@@ -22,29 +34,8 @@ lv_obj_t* get_search_bar(void) {
     return search_bar;
 }
 
-/**
- * @brief Implements the function to focus the search bar and start typing.
- */
-void app_home_focus_search_and_start_typing(uint32_t key) {
-    if (search_bar) {
-        // Focus the search bar
-        lv_group_focus_obj(search_bar);
-
-        // Convert the key to a string
-        char key_str[2] = {(char)key, '\0'};
-
-        // Clear existing text and add the new character
-        lv_textarea_set_text(search_bar, key_str);
-
-        // Move the cursor to the end of the text
-        lv_textarea_set_cursor_pos(search_bar, lv_textarea_get_cursor_pos(search_bar) + 1);
-    }
-}
-
-
 void create_app_home_view(void) {
     lv_obj_clean(lv_screen_active());
-    data_manager_init();
 
     lv_obj_t *main_container = lv_obj_create(lv_screen_active());
     lv_obj_set_size(main_container, lv_pct(100), lv_pct(100));
@@ -56,7 +47,8 @@ void create_app_home_view(void) {
     search_bar = lv_textarea_create(main_container);
     lv_obj_set_width(search_bar, lv_pct(95));
     lv_textarea_set_one_line(search_bar, true);
-    lv_textarea_set_placeholder_text(search_bar, "Search for apps...");
+    // CHANGED: Updated placeholder text
+    lv_textarea_set_placeholder_text(search_bar, "Start typing to search");
     lv_obj_add_event_cb(search_bar, search_bar_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(search_bar, search_bar_key_event_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(lv_group_get_default(), search_bar);
@@ -71,7 +63,86 @@ void create_app_home_view(void) {
     lv_obj_set_width(page_indicator_label, lv_pct(95));
     lv_obj_set_style_text_align(page_indicator_label, LV_TEXT_ALIGN_CENTER, 0);
 
-    data_manager_fetch_page(list_container, page_indicator_label, search_bar, 0, false);
+    fetch_and_display_page(0, false);
+}
+
+void app_home_show_next_page(void) {
+    if (is_fetching || end_of_list_reached) return;
+    current_offset += ITEMS_PER_PAGE;
+    fetch_and_display_page(current_offset, false);
+}
+
+void app_home_show_previous_page(void) {
+    if (is_fetching || current_offset == 0) return;
+    current_offset -= ITEMS_PER_PAGE;
+    if (current_offset < 0) current_offset = 0;
+    fetch_and_display_page(current_offset, true);
+}
+
+void app_home_focus_search_and_start_typing(uint32_t key) {
+    if (!search_bar) return;
+
+    current_offset = 0;
+    total_pages = -1;
+
+    lv_textarea_set_text(search_bar, "");
+    lv_group_focus_obj(search_bar);
+    lv_textarea_add_char(search_bar, key);
+
+    search_bar_event_cb(NULL);
+}
+
+
+static void fetch_and_display_page(int offset, bool focus_last) {
+    if (is_fetching) return;
+    is_fetching = true;
+
+    // REMOVED: Logic to hide/show search bar is no longer needed.
+
+    lv_obj_clean(list_container);
+    lv_obj_t *spinner = lv_spinner_create(list_container);
+    lv_obj_center(spinner);
+    lv_refr_now(NULL);
+
+    const char *query = lv_textarea_get_text(search_bar);
+    int project_count = 0;
+    project_t *projects = get_applications(&project_count, query, ITEMS_PER_PAGE, offset);
+
+    lv_obj_clean(list_container);
+
+    create_app_list_view(list_container, projects, project_count);
+
+    int current_page = (offset / ITEMS_PER_PAGE) + 1;
+    if (project_count < ITEMS_PER_PAGE) {
+        end_of_list_reached = true;
+        total_pages = current_page;
+    } else {
+        end_of_list_reached = false;
+    }
+
+    if (total_pages != -1) {
+        lv_label_set_text_fmt(page_indicator_label, "Page %d / %d", current_page, total_pages);
+    } else {
+        lv_label_set_text_fmt(page_indicator_label, "Page %d / ?", current_page);
+    }
+
+    if (projects) {
+        if (project_count > 0) {
+            lv_obj_t* target_to_focus = NULL;
+            if (focus_last) {
+                target_to_focus = lv_obj_get_child(list_container, project_count - 1);
+                lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
+            } else {
+                target_to_focus = (offset == 0) ? search_bar : lv_obj_get_child(list_container, 0);
+            }
+            lv_group_focus_obj(target_to_focus);
+        } else {
+             lv_group_focus_obj(search_bar);
+        }
+        free_applications(projects, project_count);
+    }
+
+    is_fetching = false;
 }
 
 static void search_bar_key_event_cb(lv_event_t *e) {
@@ -81,13 +152,15 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
     } else if (key == LV_KEY_UP) {
-        data_manager_request_previous_page();
+        app_home_show_previous_page();
     }
 }
 
 static void search_timer_cb(lv_timer_t *timer) {
     printf("Search timer fired. Starting new search...\n");
-    data_manager_start_new_search();
+    current_offset = 0;
+    total_pages = -1;
+    fetch_and_display_page(current_offset, false);
     search_timer = NULL;
 }
 
@@ -102,6 +175,5 @@ static void home_view_delete_event_cb(lv_event_t *e) {
         lv_timer_del(search_timer);
         search_timer = NULL;
     }
-    data_manager_deinit();
     search_bar = NULL;
 }
