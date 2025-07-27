@@ -1,11 +1,13 @@
 #include "app_card.h"
 #include "app_detail.h"
+#include "app_home.h"
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
 
 static void card_click_event_handler(lv_event_t * e);
 static void card_delete_event_handler(lv_event_t * e);
+static void card_key_event_handler(lv_event_t * e);
 
 void create_app_card(lv_obj_t* parent, const project_t* project) {
     static lv_style_t style_focused;
@@ -28,7 +30,7 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_user_data(card, user_data);
     lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
     lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
-    // NO key event handler is attached to the card.
+    lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL);
 
     lv_group_add_obj(lv_group_get_default(), card);
 
@@ -61,5 +63,40 @@ static void card_delete_event_handler(lv_event_t * e) {
     if (user_data) {
         free(user_data->slug);
         free(user_data);
+    }
+}
+
+static void card_key_event_handler(lv_event_t * e) {
+    uint32_t key = lv_indev_get_key(lv_indev_active());
+    lv_obj_t * card = lv_event_get_target(e);
+    lv_obj_t * parent = lv_obj_get_parent(card);
+    uint32_t current_index = lv_obj_get_index(card);
+    uint32_t child_count = lv_obj_get_child_cnt(parent);
+    lv_obj_t* new_focus_target = NULL;
+
+    if (key == LV_KEY_UP) {
+        if (current_index == 0) {
+            app_home_show_previous_page();
+            lv_event_stop_processing(e); // --- FIX: Stop event from bubbling up ---
+            return;
+        } else {
+            new_focus_target = lv_obj_get_child(parent, current_index - 1);
+        }
+    } else if (key == LV_KEY_DOWN) {
+        if (current_index == child_count - 1) {
+            app_home_show_next_page();
+            lv_event_stop_processing(e); // --- FIX: Stop event from bubbling up ---
+            return;
+        } else {
+            new_focus_target = lv_obj_get_child(parent, current_index + 1);
+        }
+    } else if (key >= ' ' && key < LV_KEY_DEL) {
+        app_home_focus_search_and_start_typing(key);
+        return;
+    }
+
+    if (new_focus_target) {
+        lv_group_focus_obj(new_focus_target);
+        lv_obj_scroll_to_view(new_focus_target, LV_ANIM_ON);
     }
 }

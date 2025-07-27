@@ -1,25 +1,32 @@
 #include "app_home.h"
 #include "app_list.h"
-#include "app_data_manager.h" // New include
+#include "badgehub_client.h"
 #include "app_card.h"
 #include "lvgl/lvgl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// --- CONSTANTS ---
+#define ITEMS_PER_PAGE 20
+
 // --- STATIC STATE VARIABLES ---
 static lv_obj_t *list_container;
 static lv_obj_t *search_bar;
 static lv_obj_t *page_indicator_label;
 static lv_timer_t *search_timer = NULL;
+
+static int current_offset = 0;
 static bool is_fetching = false;
+static bool end_of_list_reached = false;
+static int total_pages = -1;
 
 // --- FORWARD DECLARATIONS ---
 static void search_timer_cb(lv_timer_t *timer);
 static void search_bar_event_cb(lv_event_t *e);
+static void search_bar_key_event_cb(lv_event_t *e);
 static void home_view_delete_event_cb(lv_event_t *e);
-static void home_key_event_handler(lv_event_t *e);
-static void redraw_page(bool focus_last);
+static void fetch_and_display_page(int offset, bool focus_last);
 
 // --- IMPLEMENTATIONS ---
 
@@ -28,7 +35,6 @@ lv_obj_t* get_search_bar(void) {
 }
 
 void create_app_home_view(void) {
-    data_manager_init();
     lv_obj_clean(lv_screen_active());
 
     lv_obj_t *main_container = lv_obj_create(lv_screen_active());
@@ -43,6 +49,7 @@ void create_app_home_view(void) {
     lv_textarea_set_one_line(search_bar, true);
     lv_textarea_set_placeholder_text(search_bar, "Start typing to search");
     lv_obj_add_event_cb(search_bar, search_bar_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(search_bar, search_bar_key_event_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(lv_group_get_default(), search_bar);
 
     list_container = lv_obj_create(main_container);
@@ -51,85 +58,113 @@ void create_app_home_view(void) {
     lv_obj_set_flex_flow(list_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(list_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // The single key handler is now attached to the main container
-    lv_obj_add_event_cb(main_container, home_key_event_handler, LV_EVENT_KEY, NULL);
-
     page_indicator_label = lv_label_create(main_container);
     lv_obj_set_width(page_indicator_label, lv_pct(95));
     lv_obj_set_style_text_align(page_indicator_label, LV_TEXT_ALIGN_CENTER, 0);
 
-    data_manager_reset_and_load_first_page();
-    redraw_page(false);
+    fetch_and_display_page(0, false);
 }
 
-static void redraw_page(bool focus_last) {
+void app_home_show_next_page(void) {
+    if (is_fetching || end_of_list_reached) return;
+    current_offset += ITEMS_PER_PAGE;
+    fetch_and_display_page(current_offset, false);
+}
+
+void app_home_show_previous_page(void) {
+    if (is_fetching || current_offset == 0) return;
+    current_offset -= ITEMS_PER_PAGE;
+    if (current_offset < 0) current_offset = 0;
+    fetch_and_display_page(current_offset, true);
+}
+
+void app_home_focus_search_and_start_typing(uint32_t key) {
+    if (!search_bar) return;
+
+    current_offset = 0;
+    total_pages = -1;
+
+    lv_textarea_set_text(search_bar, "");
+    lv_group_focus_obj(search_bar);
+    lv_textarea_add_char(search_bar, key);
+
+    search_bar_event_cb(NULL);
+}
+
+
+static void fetch_and_display_page(int offset, bool focus_last) {
+    if (is_fetching) return;
     is_fetching = true;
 
+    lv_obj_clear_flag(search_bar, LV_OBJ_FLAG_HIDDEN);
+
     lv_obj_clean(list_container);
-    create_app_list_view(list_container, data_manager_get_projects(), data_manager_get_project_count());
+    lv_obj_t *spinner = lv_spinner_create(list_container);
+    lv_obj_center(spinner);
+    lv_refr_now(NULL);
 
-    lv_label_set_text_fmt(page_indicator_label, "Page %d", data_manager_get_current_page_num());
+    const char *query = lv_textarea_get_text(search_bar);
+    int project_count = 0;
+    project_t *projects = get_applications(&project_count, query, ITEMS_PER_PAGE, offset);
 
-    int child_count = lv_obj_get_child_cnt(list_container);
-    if (child_count > 0) {
-        if (focus_last) {
-            lv_obj_t* target = lv_obj_get_child(list_container, child_count - 1);
-            lv_group_focus_obj(target);
-            lv_obj_scroll_to_view(target, LV_ANIM_OFF);
-        } else {
-            lv_group_focus_obj(search_bar);
-        }
+    lv_obj_clean(list_container);
+
+    create_app_list_view(list_container, projects, project_count);
+
+    int current_page = (offset / ITEMS_PER_PAGE) + 1;
+    if (project_count < ITEMS_PER_PAGE) {
+        end_of_list_reached = true;
+        total_pages = current_page;
     } else {
-        lv_group_focus_obj(search_bar);
+        end_of_list_reached = false;
     }
+
+    if (total_pages != -1) {
+        lv_label_set_text_fmt(page_indicator_label, "Page %d / %d", current_page, total_pages);
+    } else {
+        lv_label_set_text_fmt(page_indicator_label, "Page %d / ?", current_page);
+    }
+
+    if (projects) {
+        if (project_count > 0) {
+            lv_obj_t* target_to_focus = NULL;
+            // --- FIX: More explicit focus logic ---
+            if (focus_last) {
+                // Case 1: Navigated UP to a previous page. Focus the last item.
+                target_to_focus = lv_obj_get_child(list_container, project_count - 1);
+                lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
+            } else if (offset > 0) {
+                // Case 2: Navigated DOWN to a next page. Focus the first item.
+                target_to_focus = lv_obj_get_child(list_container, 0);
+            } else {
+                // Case 3: Initial load or a search result. Focus the search bar.
+                target_to_focus = search_bar;
+            }
+            lv_group_focus_obj(target_to_focus);
+        } else {
+             // Case 4: No results found. Focus the search bar.
+             lv_group_focus_obj(search_bar);
+        }
+        free_applications(projects, project_count);
+    }
+
     is_fetching = false;
 }
 
-static void home_key_event_handler(lv_event_t *e) {
-    if (is_fetching) return;
-
+static void search_bar_key_event_cb(lv_event_t *e) {
     uint32_t key = lv_indev_get_key(lv_indev_active());
-    lv_obj_t* focused = lv_group_get_focused(lv_group_get_default());
-
-    if (focused == search_bar) {
-        if (key == LV_KEY_DOWN && lv_obj_get_child_cnt(list_container) > 0) {
-            lv_obj_t* first_card = lv_obj_get_child(list_container, 0);
-            lv_group_focus_obj(first_card);
-            lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
-        }
-    } else if (focused && lv_obj_get_parent(focused) == list_container) {
-        uint32_t idx = lv_obj_get_index(focused);
-        if (key == LV_KEY_UP) {
-            if (idx == 0) {
-                if (data_manager_load_previous_page()) {
-                    redraw_page(true);
-                } else {
-                    lv_group_focus_obj(search_bar);
-                }
-            } else {
-                lv_group_focus_prev(lv_group_get_default());
-                lv_obj_scroll_to_view(lv_group_get_focused(lv_group_get_default()), LV_ANIM_ON);
-            }
-        } else if (key == LV_KEY_DOWN) {
-            if (idx == lv_obj_get_child_cnt(list_container) - 1) {
-                if (data_manager_load_next_page()) {
-                    redraw_page(false);
-                }
-            } else {
-                lv_group_focus_next(lv_group_get_default());
-                lv_obj_scroll_to_view(lv_group_get_focused(lv_group_get_default()), LV_ANIM_ON);
-            }
-        } else if (key >= ' ' && key < LV_KEY_DEL) {
-            lv_group_focus_obj(search_bar);
-            lv_textarea_add_char(search_bar, key);
-        }
+    if (key == LV_KEY_DOWN && lv_obj_get_child_cnt(list_container) > 0) {
+        lv_obj_t* first_card = lv_obj_get_child(list_container, 0);
+        lv_group_focus_obj(first_card);
+        lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
     }
 }
 
 static void search_timer_cb(lv_timer_t *timer) {
-    data_manager_set_search_query(lv_textarea_get_text(search_bar));
-    data_manager_reset_and_load_first_page();
-    redraw_page(false);
+    printf("Search timer fired. Starting new search...\n");
+    current_offset = 0;
+    total_pages = -1;
+    fetch_and_display_page(current_offset, false);
     search_timer = NULL;
 }
 
@@ -144,6 +179,5 @@ static void home_view_delete_event_cb(lv_event_t *e) {
         lv_timer_del(search_timer);
         search_timer = NULL;
     }
-    data_manager_deinit();
     search_bar = NULL;
 }
