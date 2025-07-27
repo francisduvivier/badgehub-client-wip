@@ -6,9 +6,18 @@
 #include <string.h>
 #include <stdlib.h>
 
+// --- FORWARD DECLARATIONS ---
 static void card_click_event_handler(lv_event_t * e);
 static void card_delete_event_handler(lv_event_t * e);
 static void card_key_event_handler(lv_event_t * e);
+static void download_icon_timer_cb(lv_timer_t *timer);
+
+// A temporary struct to pass data to the download timer
+typedef struct {
+    lv_obj_t* card;
+    char* icon_url;
+} icon_download_data_t;
+
 
 void create_app_card(lv_obj_t* parent, const project_t* project) {
     static lv_style_t style_focused;
@@ -22,18 +31,11 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_style(card, &style_focused, LV_STATE_FOCUSED);
-    // --- FIX: Disable the scrollbar on the card itself ---
     lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
 
-
     lv_obj_t* icon_img = lv_image_create(card);
-    if (project->icon_data) {
-        lv_image_set_src(icon_img, &project->icon_dsc);
-    } else {
-        lv_image_set_src(icon_img, LV_SYMBOL_IMAGE);
-    }
+    lv_image_set_src(icon_img, LV_SYMBOL_IMAGE); // Start with a placeholder
     lv_obj_set_size(icon_img, 64, 64);
-
 
     lv_obj_t* text_container = lv_obj_create(card);
     lv_obj_remove_style_all(text_container);
@@ -42,8 +44,7 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_flex_flow(text_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_left(text_container, 10, 0);
 
-
-    card_user_data_t* user_data = malloc(sizeof(card_user_data_t));
+    card_user_data_t* user_data = calloc(1, sizeof(card_user_data_t)); // Use calloc to zero-initialize
     if (user_data) {
         user_data->slug = strdup(project->slug);
         user_data->revision = project->revision;
@@ -55,6 +56,17 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL);
 
     lv_group_add_obj(lv_group_get_default(), card);
+
+    // --- NEW: Start a timer to download the icon ---
+    if (project->icon_url) {
+        icon_download_data_t* download_data = malloc(sizeof(icon_download_data_t));
+        if (download_data) {
+            download_data->card = card;
+            download_data->icon_url = strdup(project->icon_url);
+            // Create a one-shot timer that will fire after a tiny delay
+            lv_timer_create(download_icon_timer_cb, 1, download_data);
+        }
+    }
 
     static lv_style_t style_title;
     lv_style_init(&style_title);
@@ -72,21 +84,63 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_width(desc_label, lv_pct(100));
 }
 
-static void card_click_event_handler(lv_event_t * e) {
-    card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
-    if (user_data) {
-        create_app_detail_view(user_data->slug, user_data->revision);
+static void download_icon_timer_cb(lv_timer_t *timer) {
+    icon_download_data_t* download_data = (icon_download_data_t*)timer->user_data;
+    lv_obj_t* card = download_data->card;
+
+    // Check if the card still exists before proceeding
+    if (!lv_obj_is_valid(card)) {
+        free(download_data->icon_url);
+        free(download_data);
+        return;
     }
+
+    size_t icon_size = 0;
+    uint8_t* icon_data = download_icon_to_memory(download_data->icon_url, &icon_size);
+
+    if (icon_data) {
+        card_user_data_t* user_data = lv_obj_get_user_data(card);
+        if (user_data) {
+            // Store the downloaded data in the card's permanent user data
+            user_data->icon_data = icon_data;
+            user_data->icon_dsc.data = icon_data;
+            user_data->icon_dsc.data_size = icon_size;
+            user_data->icon_dsc.header.cf = LV_COLOR_FORMAT_RAW;
+
+            // Update the image widget (it's the first child of the card)
+            lv_obj_t* icon_img = lv_obj_get_child(card, 0);
+            lv_image_set_src(icon_img, &user_data->icon_dsc);
+        } else {
+            // If user_data is somehow null, free the downloaded data to prevent a leak
+            free(icon_data);
+        }
+    }
+
+    // Clean up the temporary download data
+    free(download_data->icon_url);
+    free(download_data);
+    lv_timer_del(timer); // Delete the one-shot timer
 }
 
 static void card_delete_event_handler(lv_event_t * e) {
     card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
     if (user_data) {
         free(user_data->slug);
+        // --- NEW: Free the icon data when the card is deleted ---
+        if (user_data->icon_data) {
+            free(user_data->icon_data);
+        }
         free(user_data);
     }
 }
 
+// ... (rest of app_card.c is unchanged)
+static void card_click_event_handler(lv_event_t * e) {
+    card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
+    if (user_data) {
+        create_app_detail_view(user_data->slug, user_data->revision);
+    }
+}
 static void card_key_event_handler(lv_event_t * e) {
     uint32_t key = lv_indev_get_key(lv_indev_active());
     lv_obj_t * card = lv_event_get_target(e);
@@ -94,7 +148,6 @@ static void card_key_event_handler(lv_event_t * e) {
     uint32_t current_index = lv_obj_get_index(card);
     uint32_t child_count = lv_obj_get_child_cnt(parent);
     lv_obj_t* new_focus_target = NULL;
-
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
             app_home_show_previous_page();
@@ -111,11 +164,10 @@ static void card_key_event_handler(lv_event_t * e) {
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
-    } else if (key >= ' ' && key < LV_KEY_DEL) {
+    } else if (key >= ' ' && key <= LV_KEY_DEL || key == LV_KEY_ESC || key == LV_KEY_BACKSPACE) {
         app_home_focus_search_and_start_typing(key);
         return;
     }
-
     if (new_focus_target) {
         lv_group_focus_obj(new_focus_target);
         lv_obj_scroll_to_view(new_focus_target, LV_ANIM_ON);

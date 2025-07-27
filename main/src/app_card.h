@@ -4,20 +4,14 @@
 #include "badgehub_client.h"
 #include "lvgl/lvgl.h"
 
-/**
- * @brief The user data struct attached to each card object to store its unique info.
- */
+// The user data struct now needs a place to store the downloaded icon data
 typedef struct {
     char* slug;
     int revision;
+    uint8_t* icon_data; // Pointer to the raw PNG data
+    lv_image_dsc_t icon_dsc; // LVGL descriptor for the icon
 } card_user_data_t;
 
-/**
- * @brief Creates a single application card widget.
- *
- * @param parent The parent LVGL object to which the card will be added.
- * @param project A pointer to the project data to display on the card.
- */
 void create_app_card(lv_obj_t* parent, const project_t* project);
 
 #endif // APP_CARD_H

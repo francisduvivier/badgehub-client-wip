@@ -2,18 +2,16 @@
 #define BADGEHUB_CLIENT_H
 
 #include <stdbool.h>
-#include "lvgl/lvgl.h" // Needed for lv_image_dsc_t
+#include "lvgl/lvgl.h"
 
 // Represents a project summary from the main project list.
 typedef struct {
     char *name;
     char *slug;
     char *description;
+    char *project_url;
+    char *icon_url; // We now store the URL, not the downloaded data.
     int revision;
-
-    // --- NEW: In-memory icon data ---
-    lv_image_dsc_t icon_dsc; // LVGL descriptor pointing to the raw PNG data
-    uint8_t* icon_data;      // The raw PNG data buffer that needs to be freed
 } project_t;
 
 // Represents a single file within a project.
@@ -43,6 +41,13 @@ project_detail_t *get_project_details(const char *slug, int revision);
 void free_project_details(project_detail_t *details);
 bool download_project_file(const project_file_t* file_info, const char* project_slug);
 
-// The separate download_icon function is no longer needed.
+/**
+ * @brief Downloads an icon from a URL into a memory buffer.
+ *
+ * @param icon_url The direct URL of the icon to download.
+ * @param data_size A pointer that will be populated with the size of the downloaded data.
+ * @return A dynamically allocated buffer with the raw PNG data, or NULL on failure. The caller must free this buffer.
+ */
+uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size);
 
 #endif // BADGEHUB_CLIENT_H

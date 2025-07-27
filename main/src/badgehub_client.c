@@ -5,11 +5,10 @@
 #include <string.h>
 #include <curl/curl.h>
 #include "cjson/cJSON.h"
+#include <sys/stat.h>
+#include <errno.h>
 
 #define INSTALLATION_DIR "installation_dir"
-
-// --- FORWARD DECLARATION ---
-static uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size);
 
 project_t *get_applications(int *project_count, const char* search_query, int limit, int offset) {
     *project_count = 0;
@@ -40,7 +39,7 @@ project_t *get_applications(int *project_count, const char* search_query, int li
         cJSON *root = cJSON_Parse(chunk.memory);
         if (cJSON_IsArray(root)) {
             *project_count = cJSON_GetArraySize(root);
-            projects = calloc(*project_count, sizeof(project_t)); // Use calloc to zero-initialize
+            projects = calloc(*project_count, sizeof(project_t));
             if (projects) {
                 cJSON *proj_json = NULL;
                 int i = 0;
@@ -48,21 +47,8 @@ project_t *get_applications(int *project_count, const char* search_query, int li
                     projects[i].name = get_json_string(proj_json, "name");
                     projects[i].slug = get_json_string(proj_json, "slug");
                     projects[i].description = get_json_string(proj_json, "description");
-                    cJSON *icon_map = cJSON_GetObjectItemCaseSensitive(proj_json, "icon_map");
-                    cJSON *icon_64_obj = cJSON_GetObjectItemCaseSensitive(icon_map, "64x64");
-
-                    char* icon_url = get_json_string(icon_64_obj, "url");
-                    if (icon_url) {
-                        size_t icon_size = 0;
-                        projects[i].icon_data = download_icon_to_memory(icon_url, &icon_size);
-                        if (projects[i].icon_data) {
-                            projects[i].icon_dsc.data = projects[i].icon_data;
-                            projects[i].icon_dsc.data_size = icon_size;
-                            projects[i].icon_dsc.header.cf = LV_COLOR_FORMAT_RAW; // LVGL knows it's a PNG
-                        }
-                        free(icon_url);
-                    }
-
+                    projects[i].project_url = get_json_string(proj_json, "project_url");
+                    projects[i].icon_url = get_json_string(proj_json, "icon_url"); // Just get the URL
                     cJSON *revision_item = cJSON_GetObjectItemCaseSensitive(proj_json, "revision");
                     projects[i].revision = cJSON_IsNumber(revision_item) ? revision_item->valueint : 0;
                     i++;
@@ -77,7 +63,7 @@ project_t *get_applications(int *project_count, const char* search_query, int li
     return projects;
 }
 
-static uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size) {
+uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size) {
     if (!icon_url || strlen(icon_url) == 0) return NULL;
 
     CURL *curl_handle;
@@ -96,10 +82,9 @@ static uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size)
             if (response_code == 200) {
                 *data_size = chunk.size;
                 curl_easy_cleanup(curl_handle);
-                return (uint8_t*)chunk.memory; // Return the downloaded data
+                return (uint8_t*)chunk.memory;
             }
         }
-        // Cleanup on failure
         free(chunk.memory);
         curl_easy_cleanup(curl_handle);
     }
@@ -112,9 +97,8 @@ void free_applications(project_t *projects, int count) {
         free(projects[i].name);
         free(projects[i].slug);
         free(projects[i].description);
-        if (projects[i].icon_data) {
-            free(projects[i].icon_data);
-        }
+        free(projects[i].project_url);
+        free(projects[i].icon_url);
     }
     free(projects);
 }
