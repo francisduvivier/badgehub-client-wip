@@ -120,12 +120,12 @@ static void fetch_and_display_page(int offset, bool focus_last) {
             lv_obj_t* target_to_focus = NULL;
             if (focus_last) {
                 target_to_focus = lv_obj_get_child(list_container, project_count - 1);
+                // --- FIX: Scroll instantly to the target BEFORE focusing ---
+                lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
             } else {
                 target_to_focus = (offset == 0) ? search_bar : lv_obj_get_child(list_container, 0);
             }
             lv_group_focus_obj(target_to_focus);
-            // --- FIX: Ensure the newly focused item is always scrolled into view ---
-            lv_obj_scroll_to_view(target_to_focus, LV_ANIM_ON);
         } else {
              lv_group_focus_obj(search_bar);
         }
@@ -142,7 +142,6 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
     } else if (key == LV_KEY_UP) {
-        // When at the search bar, UP goes to the previous page
         app_home_show_previous_page();
     }
 }
