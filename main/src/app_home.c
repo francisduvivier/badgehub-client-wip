@@ -47,7 +47,6 @@ void create_app_home_view(void) {
     search_bar = lv_textarea_create(main_container);
     lv_obj_set_width(search_bar, lv_pct(95));
     lv_textarea_set_one_line(search_bar, true);
-    // CHANGED: Updated placeholder text
     lv_textarea_set_placeholder_text(search_bar, "Start typing to search");
     lv_obj_add_event_cb(search_bar, search_bar_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(search_bar, search_bar_key_event_cb, LV_EVENT_KEY, NULL);
@@ -97,7 +96,7 @@ static void fetch_and_display_page(int offset, bool focus_last) {
     if (is_fetching) return;
     is_fetching = true;
 
-    // REMOVED: Logic to hide/show search bar is no longer needed.
+    lv_obj_clear_flag(search_bar, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_clean(list_container);
     lv_obj_t *spinner = lv_spinner_create(list_container);
@@ -133,7 +132,7 @@ static void fetch_and_display_page(int offset, bool focus_last) {
                 target_to_focus = lv_obj_get_child(list_container, project_count - 1);
                 lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
             } else {
-                target_to_focus = (offset == 0) ? search_bar : lv_obj_get_child(list_container, 0);
+                target_to_focus = search_bar;
             }
             lv_group_focus_obj(target_to_focus);
         } else {
@@ -151,9 +150,8 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_obj_t* first_card = lv_obj_get_child(list_container, 0);
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
-    } else if (key == LV_KEY_UP) {
-        app_home_show_previous_page();
     }
+    // REMOVED: The conflicting "UP" key logic has been removed from this handler.
 }
 
 static void search_timer_cb(lv_timer_t *timer) {

@@ -76,8 +76,9 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            // If we are the first card, always try to focus the search bar
-            new_focus_target = get_search_bar();
+            // If we are the first card, go to the previous page.
+            app_home_show_previous_page();
+            return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index - 1);
         }
