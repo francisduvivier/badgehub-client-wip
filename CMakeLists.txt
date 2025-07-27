@@ -6,7 +6,7 @@ include_directories(${PROJECT_SOURCE_DIR}/main/inc)
 
 # Define options for LVGL
 option(LV_USE_DRAW_SDL "Use SDL draw unit" OFF)
-option(LV_USE_LIBPNG "Use libpng to decode PNG" OFF)
+option(LV_USE_LIBPNG "Use libpng to decode PNG" ON)
 option(LV_USE_LIBJPEG_TURBO "Use libjpeg turbo to decode JPEG" OFF)
 option(LV_USE_FFMPEG "Use libffmpeg to display video using lv_ffmpeg" OFF)
 option(LV_USE_FREETYPE "Use freetype library" OFF)
@@ -50,6 +50,9 @@ add_executable(main
 # Add include directories and link libraries
 target_include_directories(main PRIVATE ${PROJECT_SOURCE_DIR}/cjson)
 target_compile_definitions(main PRIVATE LV_CONF_INCLUDE_SIMPLE)
+# --- NEW: Add compile definition to enable PNG in lv_conf.h ---
+target_compile_definitions(main PRIVATE LV_USE_PNG=1)
+
 
 if(MSVC)
     target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} cjson CURL::libcurl)

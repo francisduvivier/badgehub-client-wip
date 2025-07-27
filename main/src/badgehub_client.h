@@ -2,21 +2,25 @@
 #define BADGEHUB_CLIENT_H
 
 #include <stdbool.h>
+#include "lvgl/lvgl.h" // Needed for lv_image_dsc_t
 
 // Represents a project summary from the main project list.
 typedef struct {
     char *name;
     char *slug;
     char *description;
-    char *icon_url;
     int revision;
+
+    // --- NEW: In-memory icon data ---
+    lv_image_dsc_t icon_dsc; // LVGL descriptor pointing to the raw PNG data
+    uint8_t* icon_data;      // The raw PNG data buffer that needs to be freed
 } project_t;
 
 // Represents a single file within a project.
 typedef struct {
     char *full_path;
     char *sha256;
-    char *url; // The direct download URL for the file
+    char *url;
 } project_file_t;
 
 // Represents the detailed information for a single project.
@@ -33,26 +37,12 @@ typedef struct {
 } project_detail_t;
 
 
-// Fetches a paginated list of projects, optionally filtered by a search query.
 project_t *get_applications(int *project_count, const char* search_query, int limit, int offset);
-
-// Frees the memory allocated for an array of project summaries.
 void free_applications(project_t *projects, int count);
-
-// Fetches the detailed information for a single project by its slug and revision.
 project_detail_t *get_project_details(const char *slug, int revision);
-
-// Frees the memory allocated for a project_detail_t struct.
 void free_project_details(project_detail_t *details);
-
-/**
- * @brief Downloads a single project file using its direct URL.
- *
- * @param file_info A pointer to the file information containing the download URL and local path.
- * @param project_slug The slug of the project, used to create the local directory.
- * @return True on success, false on failure.
- */
 bool download_project_file(const project_file_t* file_info, const char* project_slug);
 
+// The separate download_icon function is no longer needed.
 
 #endif // BADGEHUB_CLIENT_H

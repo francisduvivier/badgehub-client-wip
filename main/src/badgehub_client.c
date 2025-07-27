@@ -8,10 +8,10 @@
 
 #define INSTALLATION_DIR "installation_dir"
 
-// The URL templates are no longer needed for file downloads
+// --- FORWARD DECLARATION ---
+static uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size);
 
 project_t *get_applications(int *project_count, const char* search_query, int limit, int offset) {
-    // ... (This function is unchanged)
     *project_count = 0;
     CURL *curl_handle;
     CURLcode res;
@@ -40,7 +40,7 @@ project_t *get_applications(int *project_count, const char* search_query, int li
         cJSON *root = cJSON_Parse(chunk.memory);
         if (cJSON_IsArray(root)) {
             *project_count = cJSON_GetArraySize(root);
-            projects = malloc(*project_count * sizeof(project_t));
+            projects = calloc(*project_count, sizeof(project_t)); // Use calloc to zero-initialize
             if (projects) {
                 cJSON *proj_json = NULL;
                 int i = 0;
@@ -50,7 +50,19 @@ project_t *get_applications(int *project_count, const char* search_query, int li
                     projects[i].description = get_json_string(proj_json, "description");
                     cJSON *icon_map = cJSON_GetObjectItemCaseSensitive(proj_json, "icon_map");
                     cJSON *icon_64_obj = cJSON_GetObjectItemCaseSensitive(icon_map, "64x64");
-                    projects[i].icon_url = get_json_string(icon_64_obj, "url");
+
+                    char* icon_url = get_json_string(icon_64_obj, "url");
+                    if (icon_url) {
+                        size_t icon_size = 0;
+                        projects[i].icon_data = download_icon_to_memory(icon_url, &icon_size);
+                        if (projects[i].icon_data) {
+                            projects[i].icon_dsc.data = projects[i].icon_data;
+                            projects[i].icon_dsc.data_size = icon_size;
+                            projects[i].icon_dsc.header.cf = LV_COLOR_FORMAT_RAW; // LVGL knows it's a PNG
+                        }
+                        free(icon_url);
+                    }
+
                     cJSON *revision_item = cJSON_GetObjectItemCaseSensitive(proj_json, "revision");
                     projects[i].revision = cJSON_IsNumber(revision_item) ? revision_item->valueint : 0;
                     i++;
@@ -65,6 +77,49 @@ project_t *get_applications(int *project_count, const char* search_query, int li
     return projects;
 }
 
+static uint8_t* download_icon_to_memory(const char* icon_url, size_t* data_size) {
+    if (!icon_url || strlen(icon_url) == 0) return NULL;
+
+    CURL *curl_handle;
+    CURLcode res;
+    struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
+    long response_code = 0;
+
+    curl_handle = curl_easy_init();
+    if (curl_handle) {
+        curl_easy_setopt(curl_handle, CURLOPT_URL, icon_url);
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
+        res = curl_easy_perform(curl_handle);
+        if (res == CURLE_OK) {
+            curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
+            if (response_code == 200) {
+                *data_size = chunk.size;
+                curl_easy_cleanup(curl_handle);
+                return (uint8_t*)chunk.memory; // Return the downloaded data
+            }
+        }
+        // Cleanup on failure
+        free(chunk.memory);
+        curl_easy_cleanup(curl_handle);
+    }
+    return NULL;
+}
+
+void free_applications(project_t *projects, int count) {
+    if (!projects) return;
+    for (int i = 0; i < count; i++) {
+        free(projects[i].name);
+        free(projects[i].slug);
+        free(projects[i].description);
+        if (projects[i].icon_data) {
+            free(projects[i].icon_data);
+        }
+    }
+    free(projects);
+}
+
+// ... (rest of badgehub_client.c is unchanged)
 project_detail_t *get_project_details(const char *slug, int revision) {
     CURL *curl_handle;
     CURLcode res;
@@ -107,7 +162,6 @@ project_detail_t *get_project_details(const char *slug, int revision) {
                             cJSON_ArrayForEach(file_json, files_array) {
                                 details->files[i].full_path = get_json_string(file_json, "full_path");
                                 details->files[i].sha256 = get_json_string(file_json, "sha256");
-                                // --- NEW: Parse the direct URL for the file ---
                                 details->files[i].url = get_json_string(file_json, "url");
                                 i++;
                             }
@@ -123,25 +177,20 @@ project_detail_t *get_project_details(const char *slug, int revision) {
     curl_global_cleanup();
     return details;
 }
-
 bool download_project_file(const project_file_t* file_info, const char* project_slug) {
     if (!file_info || !file_info->url || !project_slug) return false;
-
     CURL *curl_handle;
     CURLcode res;
     FILE *fp;
     char local_path[512];
     long response_code = 0;
     bool success = false;
-
     snprintf(local_path, sizeof(local_path), "%s/%s/%s", INSTALLATION_DIR, project_slug, file_info->full_path);
     ensure_dir_exists(local_path);
-
     curl_handle = curl_easy_init();
     if (curl_handle) {
         fp = fopen(local_path, "wb");
         if (fp) {
-            // --- CHANGED: Use the direct URL from the file info ---
             curl_easy_setopt(curl_handle, CURLOPT_URL, file_info->url);
             curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteFileCallback);
             curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, fp);
@@ -165,7 +214,6 @@ bool download_project_file(const project_file_t* file_info, const char* project_
     }
     return success;
 }
-
 void free_project_details(project_detail_t *details) {
     if (!details) return;
     free(details->name);
@@ -178,21 +226,9 @@ void free_project_details(project_detail_t *details) {
         for (int i = 0; i < details->file_count; i++) {
             free(details->files[i].full_path);
             free(details->files[i].sha256);
-            // --- NEW: Free the allocated URL string ---
             free(details->files[i].url);
         }
         free(details->files);
     }
     free(details);
-}
-
-void free_applications(project_t *projects, int count) {
-    if (!projects) return;
-    for (int i = 0; i < count; i++) {
-        free(projects[i].name);
-        free(projects[i].slug);
-        free(projects[i].description);
-        free(projects[i].icon_url);
-    }
-    free(projects);
 }
