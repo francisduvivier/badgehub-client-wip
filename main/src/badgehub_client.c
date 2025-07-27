@@ -48,7 +48,7 @@ project_t *get_applications(int *project_count, const char* search_query, int li
                     projects[i].name = get_json_string(proj_json, "name");
                     projects[i].slug = get_json_string(proj_json, "slug");
                     projects[i].description = get_json_string(proj_json, "description");
-                    cJSON *icon_map = cJSON_GetObjectItemCaseSensitive(proj_json, "version");
+                    cJSON *icon_map = cJSON_GetObjectItemCaseSensitive(proj_json, "icon_map");
                     cJSON *icon_64_obj = cJSON_GetObjectItemCaseSensitive(icon_map, "64x64");
                     projects[i].icon_url = get_json_string(icon_64_obj, "url");
                     cJSON *revision_item = cJSON_GetObjectItemCaseSensitive(proj_json, "revision");
