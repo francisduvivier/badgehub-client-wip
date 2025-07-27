@@ -88,7 +88,6 @@ void app_home_focus_search_and_start_typing(uint32_t key) {
     if (!search_bar) return;
     current_offset = 0;
     total_pages = -1;
-    lv_textarea_set_text(search_bar, "");
     lv_group_focus_obj(search_bar);
     lv_textarea_add_char(search_bar, key);
     search_bar_event_cb(NULL);
@@ -103,7 +102,6 @@ static void fetch_and_display_page(int offset, bool focus_last) {
         icon_loader_timer = NULL;
     }
 
-    lv_obj_clear_flag(search_bar, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clean(list_container);
     lv_obj_t *spinner = lv_spinner_create(list_container);
     lv_obj_center(spinner);

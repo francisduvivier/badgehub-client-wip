@@ -133,6 +133,8 @@ static void card_key_event_handler(lv_event_t * e) {
     } else if (key >= ' ' && key < LV_KEY_DEL) {
         app_home_focus_search_and_start_typing(key);
         return;
+    }else if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE || key == LV_KEY_DEL) {
+        app_home_focus_search_and_start_typing(0);
     }
     if (new_focus_target) {
         lv_group_focus_obj(new_focus_target);

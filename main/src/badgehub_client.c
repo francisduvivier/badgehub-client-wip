@@ -22,9 +22,10 @@ project_t *get_applications(int *project_count, const char* search_query, int li
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
     if (!curl_handle) { free(chunk.memory); return NULL; }
-    char *escaped_query = NULL;
     if (search_query && strlen(search_query) > 0) {
+        char *escaped_query = NULL;
         escaped_query = curl_easy_escape(curl_handle, search_query, 0);
+        printf("Searching with ?search=%s&pageLength=%d&pageStart=%d\n", escaped_query, limit, offset);
         snprintf(url, sizeof(url), "%s?search=%s&pageLength=%d&pageStart=%d", base_url, escaped_query, limit, offset);
         curl_free(escaped_query);
     } else {
