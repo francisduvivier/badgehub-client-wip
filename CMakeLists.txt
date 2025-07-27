@@ -43,6 +43,7 @@ add_executable(main
         main/src/app_card.c
         main/src/app_detail.c
         main/src/app_home.c
+        main/src/utils.c
 )
 
 # Add include directories and link libraries

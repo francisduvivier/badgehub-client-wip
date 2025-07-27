@@ -1,21 +1,15 @@
 #include "app_card.h"
 #include "app_detail.h"
-#include "app_home.h" // Needed to focus the search bar
+#include "app_home.h"
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
 
-typedef struct {
-    char* slug;
-    int revision;
-} card_user_data_t;
+// The definition for card_user_data_t has been moved to app_card.h
 
-// --- FORWARD DECLARATIONS ---
 static void card_click_event_handler(lv_event_t * e);
 static void card_delete_event_handler(lv_event_t * e);
-static void card_key_event_handler(lv_event_t * e); // The handler is now here
-
-// --- IMPLEMENTATIONS ---
+static void card_key_event_handler(lv_event_t * e);
 
 void create_app_card(lv_obj_t* parent, const project_t* project) {
     static lv_style_t style_focused;
@@ -29,15 +23,18 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_style(card, &style_focused, LV_STATE_FOCUSED);
 
+    // Use the now-public card_user_data_t type
     card_user_data_t* user_data = malloc(sizeof(card_user_data_t));
     if (user_data) {
         user_data->slug = strdup(project->slug);
         user_data->revision = project->revision;
     }
 
+    // Set the user data on the object so it can be retrieved elsewhere
+    lv_obj_set_user_data(card, user_data);
+
     lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
     lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
-    // Add the key event handler directly to the card
     lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL);
 
     lv_group_add_obj(lv_group_get_default(), card);
@@ -74,9 +71,6 @@ static void card_delete_event_handler(lv_event_t * e) {
     }
 }
 
-/**
- * @brief Handles key events for a single card, managing focus navigation and scrolling.
- */
 static void card_key_event_handler(lv_event_t * e) {
     uint32_t key = lv_indev_get_key(lv_indev_active());
     lv_obj_t * card = lv_event_get_target(e);
@@ -86,24 +80,22 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            // First item in the list, so focus the search bar
             lv_group_focus_obj(get_search_bar());
         } else {
-            // Focus the previous card (sibling) in the list
             lv_obj_t * prev_card = lv_obj_get_child(parent, current_index - 1);
             lv_group_focus_obj(prev_card);
-            // --- NEW: Scroll the newly focused card into view ---
             lv_obj_scroll_to_view(prev_card, LV_ANIM_ON);
         }
     } else if (key == LV_KEY_DOWN) {
+        if (current_index >= child_count - 3) {
+            app_home_fetch_more();
+        }
+
         if (current_index == child_count - 1) {
-            // Last item in the list, so focus the search bar
             lv_group_focus_obj(get_search_bar());
         } else {
-            // Focus the next card (sibling) in the list
             lv_obj_t * next_card = lv_obj_get_child(parent, current_index + 1);
             lv_group_focus_obj(next_card);
-            // --- NEW: Scroll the newly focused card into view ---
             lv_obj_scroll_to_view(next_card, LV_ANIM_ON);
         }
     }

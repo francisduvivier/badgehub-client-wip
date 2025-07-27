@@ -1,113 +1,42 @@
 #include "badgehub_client.h"
+#include "utils.h" // Include the new utility header
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
 #include "cjson/cJSON.h"
-#include <sys/stat.h> // For mkdir
-#include <errno.h>    // For errno
 
 #define BADGEHUB_API_BASE_URL "https://badgehub.p1m.nl/api/v3"
 #define INSTALLATION_DIR "installation_dir"
 
-// --- URL Templates ---
 #define PROJECTS_URL_TEMPLATE "%s/projects"
 #define PROJECT_DETAIL_URL_TEMPLATE "%s/projects/%s/rev%d"
 #define PROJECT_FILE_URL_TEMPLATE "%s/projects/%s/rev%d/files/%s"
 
+// The helper functions have been removed from this file.
 
-// --- FORWARD DECLARATIONS ---
-static void ensure_dir_exists(const char *path);
-
-// Struct to help curl write data into a dynamically growing memory buffer
-struct MemoryStruct {
-    char *memory;
-    size_t size;
-};
-
-// libcurl callback function to write received data into our MemoryStruct
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-    size_t realsize = size * nmemb;
-    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
-    if (!ptr) {
-        printf("not enough memory (realloc returned NULL)\n");
-        return 0;
-    }
-    mem->memory = ptr;
-    memcpy(&(mem->memory[mem->size]), contents, realsize);
-    mem->size += realsize;
-    mem->memory[mem->size] = 0;
-    return realsize;
-}
-
-// libcurl callback to write downloaded file data to a FILE* handle
-static size_t WriteFileCallback(void *ptr, size_t size, size_t nmemb, FILE *stream) {
-    return fwrite(ptr, size, nmemb, stream);
-}
-
-
-// Helper function to safely extract a string from a cJSON object.
-static char* get_json_string(cJSON *json, const char *key) {
-    if (!json) return NULL;
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(json, key);
-    if (cJSON_IsString(item) && (item->valuestring != NULL)) {
-        char *str = malloc(strlen(item->valuestring) + 1);
-        if (str) {
-            strcpy(str, item->valuestring);
-        }
-        return str;
-    }
-    char *empty_str = malloc(1);
-    if(empty_str) *empty_str = '\0';
-    return empty_str;
-}
-
-/**
- * @brief Ensures the full directory path for a file exists, creating it if necessary.
- *
- * @param path The full path to the file (e.g., "dir1/dir2/file.txt").
- */
-static void ensure_dir_exists(const char *path) {
-    char *path_copy = strdup(path);
-    if (!path_copy) return;
-
-    // Iterate through the path and create directories level by level
-    for (char *p = path_copy; *p; p++) {
-        if (*p == '/') {
-            *p = '\0'; // Temporarily terminate the string
-            // Create directory, ignore error if it already exists
-            if (mkdir(path_copy, 0755) != 0 && errno != EEXIST) {
-                 fprintf(stderr, "Failed to create directory %s\n", path_copy);
-            }
-            *p = '/'; // Restore the slash
-        }
-    }
-    free(path_copy);
-}
-
-project_t *get_applications(int *project_count, const char* search_query) {
+project_t *get_applications(int *project_count, const char* search_query, int limit, int offset) {
     *project_count = 0;
     CURL *curl_handle;
     CURLcode res;
     struct MemoryStruct chunk = { .memory = malloc(1), .size = 0 };
     project_t *projects = NULL;
     char url[512];
+    char base_url[256];
 
-    // Build the base URL
-    snprintf(url, sizeof(url), PROJECTS_URL_TEMPLATE, BADGEHUB_API_BASE_URL);
+    snprintf(base_url, sizeof(base_url), PROJECTS_URL_TEMPLATE, BADGEHUB_API_BASE_URL);
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
     if (!curl_handle) { free(chunk.memory); return NULL; }
 
-    // If there's a search query, append it
+    char *escaped_query = NULL;
     if (search_query && strlen(search_query) > 0) {
-        char *escaped_query = curl_easy_escape(curl_handle, search_query, 0);
-        if (escaped_query) {
-            snprintf(url, sizeof(url), "%s/projects?search=%s", BADGEHUB_API_BASE_URL, escaped_query);
-            curl_free(escaped_query);
-        }
+        escaped_query = curl_easy_escape(curl_handle, search_query, 0);
+        snprintf(url, sizeof(url), "%s?search=%s&limit=%d&offset=%d", base_url, escaped_query, limit, offset);
+        curl_free(escaped_query);
+    } else {
+        snprintf(url, sizeof(url), "%s?limit=%d&offset=%d", base_url, limit, offset);
     }
 
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);

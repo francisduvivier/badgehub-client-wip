@@ -5,10 +5,15 @@
 #include "lvgl/lvgl.h"
 
 /**
+ * @brief The user data struct attached to each card object to store its unique info.
+ */
+typedef struct {
+    char* slug;
+    int revision;
+} card_user_data_t;
+
+/**
  * @brief Creates a single application card widget.
- *
- * This function creates a styled container with labels for a project's
- * title and description, and adds it to the specified parent object.
  *
  * @param parent The parent LVGL object to which the card will be added.
  * @param project A pointer to the project data to display on the card.

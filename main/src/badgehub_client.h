@@ -33,8 +33,8 @@ typedef struct {
 } project_detail_t;
 
 
-// Fetches the list of projects, optionally filtered by a search query.
-project_t *get_applications(int *project_count, const char* search_query);
+// Fetches a paginated list of projects, optionally filtered by a search query.
+project_t *get_applications(int *project_count, const char* search_query, int limit, int offset);
 
 // Frees the memory allocated for an array of project summaries.
 void free_applications(project_t *projects, int count);
