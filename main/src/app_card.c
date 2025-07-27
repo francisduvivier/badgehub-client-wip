@@ -5,8 +5,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-// The definition for card_user_data_t has been moved to app_card.h
-
 static void card_click_event_handler(lv_event_t * e);
 static void card_delete_event_handler(lv_event_t * e);
 static void card_key_event_handler(lv_event_t * e);
@@ -23,18 +21,16 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_style(card, &style_focused, LV_STATE_FOCUSED);
 
-    // Use the now-public card_user_data_t type
     card_user_data_t* user_data = malloc(sizeof(card_user_data_t));
     if (user_data) {
         user_data->slug = strdup(project->slug);
         user_data->revision = project->revision;
     }
 
-    // Set the user data on the object so it can be retrieved elsewhere
     lv_obj_set_user_data(card, user_data);
-
     lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
     lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
+    // The key handler is correctly placed on the card itself.
     lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL);
 
     lv_group_add_obj(lv_group_get_default(), card);
@@ -77,26 +73,33 @@ static void card_key_event_handler(lv_event_t * e) {
     lv_obj_t * parent = lv_obj_get_parent(card);
     uint32_t current_index = lv_obj_get_index(card);
     uint32_t child_count = lv_obj_get_child_cnt(parent);
+    lv_obj_t* new_focus_target = NULL;
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            lv_group_focus_obj(get_search_bar());
+            new_focus_target = get_search_bar();
         } else {
-            lv_obj_t * prev_card = lv_obj_get_child(parent, current_index - 1);
-            lv_group_focus_obj(prev_card);
-            lv_obj_scroll_to_view(prev_card, LV_ANIM_ON);
+            new_focus_target = lv_obj_get_child(parent, current_index - 1);
         }
     } else if (key == LV_KEY_DOWN) {
-        if (current_index >= child_count - 3) {
-            app_home_fetch_more();
-        }
-
         if (current_index == child_count - 1) {
-            lv_group_focus_obj(get_search_bar());
+            new_focus_target = get_search_bar();
         } else {
-            lv_obj_t * next_card = lv_obj_get_child(parent, current_index + 1);
-            lv_group_focus_obj(next_card);
-            lv_obj_scroll_to_view(next_card, LV_ANIM_ON);
+            new_focus_target = lv_obj_get_child(parent, current_index + 1);
+        }
+    }
+
+    if (new_focus_target) {
+        lv_group_focus_obj(new_focus_target);
+        // Ensure the newly focused item is scrolled into view
+        lv_obj_scroll_to_view(new_focus_target, LV_ANIM_ON);
+
+        // If the new target is a card, check if we need to fetch more data
+        if (lv_obj_get_parent(new_focus_target) == parent) {
+            uint32_t new_index = lv_obj_get_index(new_focus_target);
+            if (new_index >= child_count - 2) {
+                app_home_fetch_more();
+            }
         }
     }
 }
