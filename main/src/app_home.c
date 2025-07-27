@@ -44,7 +44,6 @@ void create_app_home_view(void) {
     lv_obj_center(main_container);
     lv_obj_add_event_cb(main_container, home_view_delete_event_cb, LV_EVENT_DELETE, NULL);
 
-    // Create the search bar as a direct child of the main container
     search_bar = lv_textarea_create(main_container);
     lv_obj_set_width(search_bar, lv_pct(95));
     lv_textarea_set_one_line(search_bar, true);
@@ -83,7 +82,6 @@ static void fetch_and_display_page(int offset, bool focus_last) {
     if (is_fetching) return;
     is_fetching = true;
 
-    // Show/hide the search bar based on the page
     if (offset == 0) {
         lv_obj_clear_flag(search_bar, LV_OBJ_FLAG_HIDDEN);
     } else {
@@ -101,7 +99,6 @@ static void fetch_and_display_page(int offset, bool focus_last) {
 
     lv_obj_clean(list_container);
 
-    // The list view no longer needs to know about the search bar
     create_app_list_view(list_container, projects, project_count);
 
     int current_page = (offset / ITEMS_PER_PAGE) + 1;
@@ -120,12 +117,15 @@ static void fetch_and_display_page(int offset, bool focus_last) {
 
     if (projects) {
         if (project_count > 0) {
+            lv_obj_t* target_to_focus = NULL;
             if (focus_last) {
-                lv_group_focus_obj(lv_obj_get_child(list_container, project_count - 1));
+                target_to_focus = lv_obj_get_child(list_container, project_count - 1);
             } else {
-                // On page 1, focus search bar. On other pages, focus first card.
-                lv_group_focus_obj((offset == 0) ? search_bar : lv_obj_get_child(list_container, 0));
+                target_to_focus = (offset == 0) ? search_bar : lv_obj_get_child(list_container, 0);
             }
+            lv_group_focus_obj(target_to_focus);
+            // --- FIX: Ensure the newly focused item is always scrolled into view ---
+            lv_obj_scroll_to_view(target_to_focus, LV_ANIM_ON);
         } else {
              lv_group_focus_obj(search_bar);
         }
@@ -141,6 +141,9 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_obj_t* first_card = lv_obj_get_child(list_container, 0);
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
+    } else if (key == LV_KEY_UP) {
+        // When at the search bar, UP goes to the previous page
+        app_home_show_previous_page();
     }
 }
 
@@ -163,5 +166,5 @@ static void home_view_delete_event_cb(lv_event_t *e) {
         lv_timer_del(search_timer);
         search_timer = NULL;
     }
-    search_bar = NULL; // The object is deleted with its parent, just nullify the pointer.
+    search_bar = NULL;
 }
