@@ -8,31 +8,23 @@
 #include <string.h>
 
 // --- CONSTANTS ---
-#define INITIAL_LOAD_LIMIT 20
-#define SCROLL_FETCH_LIMIT 10
-#define PRUNE_THRESHOLD 20
-#define PRUNE_AMOUNT 10
+#define ITEMS_PER_PAGE 20
 
 // --- STATIC STATE VARIABLES ---
 static lv_obj_t *list_container;
 static lv_obj_t *search_bar;
 static lv_timer_t *search_timer = NULL;
 
-static project_t *loaded_projects = NULL;
-static int loaded_project_count = 0;
-static int list_start_offset = 0;
-static bool end_of_list_reached = false;
+static int current_offset = 0;
 static bool is_fetching = false;
+static bool end_of_list_reached = false;
 
 // --- FORWARD DECLARATIONS ---
 static void search_timer_cb(lv_timer_t *timer);
 static void search_bar_event_cb(lv_event_t *e);
 static void search_bar_key_event_cb(lv_event_t *e);
 static void home_view_delete_event_cb(lv_event_t *e);
-static void reset_and_fetch_initial(void);
-static void fetch_more_apps(void);
-static void prune_list_from_start(void);
-static void redraw_list_and_preserve_focus(void);
+static void fetch_and_display_page(int offset, bool focus_last);
 
 // --- IMPLEMENTATIONS ---
 
@@ -65,126 +57,61 @@ void create_app_home_view(void) {
 
     lv_group_add_obj(lv_group_get_default(), search_bar);
 
-    reset_and_fetch_initial();
+    fetch_and_display_page(0, false);
 }
 
-void app_home_handle_list_nav(void) {
-    lv_obj_t* focused_card = lv_group_get_focused(lv_group_get_default());
-    if (!focused_card || lv_obj_get_parent(focused_card) != list_container) return;
-
-    uint32_t focused_idx = lv_obj_get_index(focused_card);
-
-    if (focused_idx >= loaded_project_count - 2) {
-        fetch_more_apps();
-    }
-
-    if (focused_idx > PRUNE_THRESHOLD) {
-        prune_list_from_start();
-    }
-}
-
-static void fetch_more_apps(void) {
+void app_home_show_next_page(void) {
     if (is_fetching || end_of_list_reached) return;
+    current_offset += ITEMS_PER_PAGE;
+    fetch_and_display_page(current_offset, false);
+}
+
+void app_home_show_previous_page(void) {
+    if (is_fetching || current_offset == 0) return;
+    current_offset -= ITEMS_PER_PAGE;
+    if (current_offset < 0) current_offset = 0;
+    fetch_and_display_page(current_offset, true);
+}
+
+static void fetch_and_display_page(int offset, bool focus_last) {
+    if (is_fetching) return;
     is_fetching = true;
-
-    const char *query = lv_textarea_get_text(search_bar);
-    int limit = (list_start_offset == 0 && loaded_project_count == 0) ? INITIAL_LOAD_LIMIT : SCROLL_FETCH_LIMIT;
-    int offset = list_start_offset + loaded_project_count;
-    int new_count = 0;
-
-    project_t *new_projects = get_applications(&new_count, query, limit, offset);
-
-    if (new_projects && new_count > 0) {
-        int old_count = loaded_project_count;
-        loaded_project_count += new_count;
-        loaded_projects = realloc(loaded_projects, loaded_project_count * sizeof(project_t));
-        memcpy(&loaded_projects[old_count], new_projects, new_count * sizeof(project_t));
-        free(new_projects);
-
-        if (new_count < limit) end_of_list_reached = true;
-    } else {
-        end_of_list_reached = true;
-        if (new_projects) free(new_projects);
-    }
-
-    redraw_list_and_preserve_focus();
-    is_fetching = false;
-}
-
-/**
- * @brief Correctly prunes items from the beginning of the loaded_projects array.
- */
-static void prune_list_from_start(void) {
-    if (loaded_project_count < PRUNE_THRESHOLD + PRUNE_AMOUNT) return;
-
-    printf("Pruning %d items from the start of the list.\n", PRUNE_AMOUNT);
-
-    // 1. Free the internal strings of the projects that will be removed.
-    for (int i = 0; i < PRUNE_AMOUNT; i++) {
-        free(loaded_projects[i].name);
-        free(loaded_projects[i].slug);
-        free(loaded_projects[i].description);
-        free(loaded_projects[i].project_url);
-        free(loaded_projects[i].icon_url);
-    }
-
-    // 2. Update the state variables
-    loaded_project_count -= PRUNE_AMOUNT;
-    list_start_offset += PRUNE_AMOUNT;
-
-    // 3. Move the remaining valid projects to the beginning of the memory block.
-    memmove(loaded_projects, &loaded_projects[PRUNE_AMOUNT], loaded_project_count * sizeof(project_t));
-
-    // 4. (Optional but good practice) Shrink the memory allocation to the new size.
-    project_t* new_ptr = realloc(loaded_projects, loaded_project_count * sizeof(project_t));
-    if (new_ptr) {
-        loaded_projects = new_ptr;
-    } // If realloc fails, we can continue with the oversized buffer for now.
-
-    // 5. Redraw the UI with the pruned list.
-    redraw_list_and_preserve_focus();
-}
-
-static void reset_and_fetch_initial(void) {
-    if (loaded_projects) {
-        free_applications(loaded_projects, loaded_project_count);
-        loaded_projects = NULL;
-    }
-    loaded_project_count = 0;
-    list_start_offset = 0;
-    end_of_list_reached = false;
-    is_fetching = false;
 
     lv_obj_clean(list_container);
     lv_obj_t *spinner = lv_spinner_create(list_container);
     lv_obj_center(spinner);
     lv_refr_now(NULL);
 
-    fetch_more_apps();
-}
+    const char *query = lv_textarea_get_text(search_bar);
+    int project_count = 0;
+    project_t *projects = get_applications(&project_count, query, ITEMS_PER_PAGE, offset);
 
-static void redraw_list_and_preserve_focus(void) {
-    char* focused_slug = NULL;
-    lv_obj_t* focused_card = lv_group_get_focused(lv_group_get_default());
-    if (focused_card && lv_obj_get_parent(focused_card) == list_container) {
-        card_user_data_t* user_data = lv_obj_get_user_data(focused_card);
-        if (user_data) focused_slug = strdup(user_data->slug);
-    }
+    lv_obj_clean(list_container); // Remove spinner
 
-    lv_obj_clean(list_container);
-    create_app_list_view(list_container, loaded_projects, loaded_project_count);
+    create_app_list_view(list_container, projects, project_count);
 
-    if (focused_slug) {
-        for (int i = 0; i < loaded_project_count; i++) {
-            if (strcmp(loaded_projects[i].slug, focused_slug) == 0) {
-                lv_obj_t* new_focused_card = lv_obj_get_child(list_container, i);
-                lv_group_focus_obj(new_focused_card);
-                lv_obj_scroll_to_view(new_focused_card, LV_ANIM_ON);
-                break;
-            }
+    if (projects) {
+        if (project_count < ITEMS_PER_PAGE) {
+            end_of_list_reached = true;
+        } else {
+            end_of_list_reached = false;
         }
-        free(focused_slug);
+
+        // Focus the correct item after the list is rebuilt
+        if (project_count > 0) {
+            if (focus_last) {
+                lv_group_focus_obj(lv_obj_get_child(list_container, project_count - 1));
+            } else {
+                lv_group_focus_obj(lv_obj_get_child(list_container, 0));
+            }
+        } else {
+             lv_group_focus_obj(search_bar); // Focus search bar if no results
+        }
+
+        free_applications(projects, project_count);
     }
+
+    is_fetching = false;
 }
 
 static void search_bar_key_event_cb(lv_event_t *e) {
@@ -193,12 +120,15 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_obj_t* first_card = lv_obj_get_child(list_container, 0);
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
+    } else if (key == LV_KEY_UP) {
+        app_home_show_previous_page();
     }
 }
 
 static void search_timer_cb(lv_timer_t *timer) {
     printf("Search timer fired. Starting new search...\n");
-    reset_and_fetch_initial();
+    current_offset = 0; // Reset pagination on new search
+    fetch_and_display_page(current_offset, false);
     search_timer = NULL;
 }
 
@@ -212,9 +142,5 @@ static void home_view_delete_event_cb(lv_event_t *e) {
     if (search_timer) {
         lv_timer_del(search_timer);
         search_timer = NULL;
-    }
-    if (loaded_projects) {
-        free_applications(loaded_projects, loaded_project_count);
-        loaded_projects = NULL;
     }
 }

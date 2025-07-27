@@ -30,7 +30,6 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_user_data(card, user_data);
     lv_obj_add_event_cb(card, card_click_event_handler, LV_EVENT_CLICKED, user_data);
     lv_obj_add_event_cb(card, card_delete_event_handler, LV_EVENT_DELETE, user_data);
-    // The key handler is correctly placed on the card itself.
     lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL);
 
     lv_group_add_obj(lv_group_get_default(), card);
@@ -83,7 +82,9 @@ static void card_key_event_handler(lv_event_t * e) {
         }
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
-            new_focus_target = get_search_bar();
+            // At the end of the list, trigger next page load
+            app_home_show_next_page();
+            return; // Don't continue with focus logic, page change will handle it
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
@@ -92,10 +93,5 @@ static void card_key_event_handler(lv_event_t * e) {
     if (new_focus_target) {
         lv_group_focus_obj(new_focus_target);
         lv_obj_scroll_to_view(new_focus_target, LV_ANIM_ON);
-
-        // After navigating, check if we need to update the data model
-        if (lv_obj_get_parent(new_focus_target) == parent) {
-            app_home_handle_list_nav();
-        }
     }
 }
