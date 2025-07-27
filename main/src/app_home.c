@@ -74,12 +74,10 @@ void app_home_handle_list_nav(void) {
 
     uint32_t focused_idx = lv_obj_get_index(focused_card);
 
-    // Fetch more if near the end
     if (focused_idx >= loaded_project_count - 2) {
         fetch_more_apps();
     }
 
-    // Prune from start if focus is too far ahead
     if (focused_idx > PRUNE_THRESHOLD) {
         prune_list_from_start();
     }
@@ -113,15 +111,37 @@ static void fetch_more_apps(void) {
     is_fetching = false;
 }
 
+/**
+ * @brief Correctly prunes items from the beginning of the loaded_projects array.
+ */
 static void prune_list_from_start(void) {
     if (loaded_project_count < PRUNE_THRESHOLD + PRUNE_AMOUNT) return;
 
     printf("Pruning %d items from the start of the list.\n", PRUNE_AMOUNT);
-    free_applications(loaded_projects, PRUNE_AMOUNT);
+
+    // 1. Free the internal strings of the projects that will be removed.
+    for (int i = 0; i < PRUNE_AMOUNT; i++) {
+        free(loaded_projects[i].name);
+        free(loaded_projects[i].slug);
+        free(loaded_projects[i].description);
+        free(loaded_projects[i].project_url);
+        free(loaded_projects[i].icon_url);
+    }
+
+    // 2. Update the state variables
     loaded_project_count -= PRUNE_AMOUNT;
-    memmove(loaded_projects, &loaded_projects[PRUNE_AMOUNT], loaded_project_count * sizeof(project_t));
     list_start_offset += PRUNE_AMOUNT;
 
+    // 3. Move the remaining valid projects to the beginning of the memory block.
+    memmove(loaded_projects, &loaded_projects[PRUNE_AMOUNT], loaded_project_count * sizeof(project_t));
+
+    // 4. (Optional but good practice) Shrink the memory allocation to the new size.
+    project_t* new_ptr = realloc(loaded_projects, loaded_project_count * sizeof(project_t));
+    if (new_ptr) {
+        loaded_projects = new_ptr;
+    } // If realloc fails, we can continue with the oversized buffer for now.
+
+    // 5. Redraw the UI with the pruned list.
     redraw_list_and_preserve_focus();
 }
 
