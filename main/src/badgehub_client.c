@@ -25,10 +25,10 @@ project_t *get_applications(int *project_count, const char* search_query, int li
     char *escaped_query = NULL;
     if (search_query && strlen(search_query) > 0) {
         escaped_query = curl_easy_escape(curl_handle, search_query, 0);
-        snprintf(url, sizeof(url), "%s?search=%s&limit=%d&offset=%d", base_url, escaped_query, limit, offset);
+        snprintf(url, sizeof(url), "%s?search=%s&pageLength=%d&pageStart=%d", base_url, escaped_query, limit, offset);
         curl_free(escaped_query);
     } else {
-        snprintf(url, sizeof(url), "%s?limit=%d&offset=%d", base_url, limit, offset);
+        snprintf(url, sizeof(url), "%s?pageLength=%d&pageStart=%d", base_url, limit, offset);
     }
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);

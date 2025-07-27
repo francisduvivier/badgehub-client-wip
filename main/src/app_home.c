@@ -8,7 +8,7 @@
 #include <string.h>
 
 // --- CONSTANTS ---
-#define ITEMS_PER_PAGE 20
+#define ITEMS_PER_PAGE 7
 
 // --- STATIC STATE VARIABLES ---
 static lv_obj_t *list_container;
