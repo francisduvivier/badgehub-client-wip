@@ -8,7 +8,6 @@ typedef struct {
     char *name;
     char *slug;
     char *description;
-    char *project_url;
     char *icon_url;
     int revision;
 } project_t;
@@ -17,6 +16,7 @@ typedef struct {
 typedef struct {
     char *full_path;
     char *sha256;
+    char *url; // The direct download URL for the file
 } project_file_t;
 
 // Represents the detailed information for a single project.
@@ -45,8 +45,14 @@ project_detail_t *get_project_details(const char *slug, int revision);
 // Frees the memory allocated for a project_detail_t struct.
 void free_project_details(project_detail_t *details);
 
-// Downloads a single project file for a specific revision.
-bool download_project_file(const char* slug, int revision, const project_file_t* file_info);
+/**
+ * @brief Downloads a single project file using its direct URL.
+ *
+ * @param file_info A pointer to the file information containing the download URL and local path.
+ * @param project_slug The slug of the project, used to create the local directory.
+ * @return True on success, false on failure.
+ */
+bool download_project_file(const project_file_t* file_info, const char* project_slug);
 
 
 #endif // BADGEHUB_CLIENT_H
