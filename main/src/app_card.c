@@ -44,7 +44,7 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_flex_flow(text_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_left(text_container, 10, 0);
 
-    card_user_data_t* user_data = calloc(1, sizeof(card_user_data_t)); // Use calloc to zero-initialize
+    card_user_data_t* user_data = calloc(1, sizeof(card_user_data_t));
     if (user_data) {
         user_data->slug = strdup(project->slug);
         user_data->revision = project->revision;
@@ -57,14 +57,13 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
 
     lv_group_add_obj(lv_group_get_default(), card);
 
-    // --- NEW: Start a timer to download the icon ---
     if (project->icon_url) {
         icon_download_data_t* download_data = malloc(sizeof(icon_download_data_t));
         if (download_data) {
             download_data->card = card;
             download_data->icon_url = strdup(project->icon_url);
-            // Create a one-shot timer that will fire after a tiny delay
-            lv_timer_create(download_icon_timer_cb, 1, download_data);
+            lv_timer_t* timer = lv_timer_create(download_icon_timer_cb, 1, download_data);
+            lv_timer_set_repeat_count(timer, 1);
         }
     }
 
@@ -85,10 +84,10 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
 }
 
 static void download_icon_timer_cb(lv_timer_t *timer) {
-    icon_download_data_t* download_data = (icon_download_data_t*)timer->user_data;
+    // --- FIX: Use the correct API function to get user data ---
+    icon_download_data_t* download_data = (icon_download_data_t*)lv_timer_get_user_data(timer);
     lv_obj_t* card = download_data->card;
 
-    // Check if the card still exists before proceeding
     if (!lv_obj_is_valid(card)) {
         free(download_data->icon_url);
         free(download_data);
@@ -101,32 +100,26 @@ static void download_icon_timer_cb(lv_timer_t *timer) {
     if (icon_data) {
         card_user_data_t* user_data = lv_obj_get_user_data(card);
         if (user_data) {
-            // Store the downloaded data in the card's permanent user data
             user_data->icon_data = icon_data;
             user_data->icon_dsc.data = icon_data;
             user_data->icon_dsc.data_size = icon_size;
             user_data->icon_dsc.header.cf = LV_COLOR_FORMAT_RAW;
 
-            // Update the image widget (it's the first child of the card)
             lv_obj_t* icon_img = lv_obj_get_child(card, 0);
             lv_image_set_src(icon_img, &user_data->icon_dsc);
         } else {
-            // If user_data is somehow null, free the downloaded data to prevent a leak
             free(icon_data);
         }
     }
 
-    // Clean up the temporary download data
     free(download_data->icon_url);
     free(download_data);
-    lv_timer_del(timer); // Delete the one-shot timer
 }
 
 static void card_delete_event_handler(lv_event_t * e) {
     card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
     if (user_data) {
         free(user_data->slug);
-        // --- NEW: Free the icon data when the card is deleted ---
         if (user_data->icon_data) {
             free(user_data->icon_data);
         }
@@ -164,7 +157,7 @@ static void card_key_event_handler(lv_event_t * e) {
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
-    } else if (key >= ' ' && key <= LV_KEY_DEL || key == LV_KEY_ESC || key == LV_KEY_BACKSPACE) {
+    } else if (key >= ' ' && key < LV_KEY_DEL) {
         app_home_focus_search_and_start_typing(key);
         return;
     }

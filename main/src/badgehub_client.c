@@ -47,8 +47,12 @@ project_t *get_applications(int *project_count, const char* search_query, int li
                     projects[i].name = get_json_string(proj_json, "name");
                     projects[i].slug = get_json_string(proj_json, "slug");
                     projects[i].description = get_json_string(proj_json, "description");
-                    projects[i].project_url = get_json_string(proj_json, "project_url");
-                    projects[i].icon_url = get_json_string(proj_json, "icon_url"); // Just get the URL
+
+                    // --- FIX: Use the correct nested parsing for the icon URL ---
+                    cJSON *icon_map = cJSON_GetObjectItemCaseSensitive(proj_json, "icon_map");
+                    cJSON *icon_64_obj = cJSON_GetObjectItemCaseSensitive(icon_map, "64x64");
+                    projects[i].icon_url = get_json_string(icon_64_obj, "url");
+
                     cJSON *revision_item = cJSON_GetObjectItemCaseSensitive(proj_json, "revision");
                     projects[i].revision = cJSON_IsNumber(revision_item) ? revision_item->valueint : 0;
                     i++;
@@ -97,13 +101,11 @@ void free_applications(project_t *projects, int count) {
         free(projects[i].name);
         free(projects[i].slug);
         free(projects[i].description);
-        free(projects[i].project_url);
         free(projects[i].icon_url);
     }
     free(projects);
 }
 
-// ... (rest of badgehub_client.c is unchanged)
 project_detail_t *get_project_details(const char *slug, int revision) {
     CURL *curl_handle;
     CURLcode res;
