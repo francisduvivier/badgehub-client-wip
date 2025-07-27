@@ -1,7 +1,7 @@
 #include "app_card.h"
 #include "app_detail.h"
 #include "app_home.h"
-#include "badgehub_client.h" // Needed for the download_icon function
+#include "badgehub_client.h"
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
@@ -17,11 +17,14 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_style_set_border_width(&style_focused, 2);
 
     lv_obj_t* card = lv_obj_create(parent);
-    lv_obj_set_size(card, lv_pct(95), 80); // Set a fixed height for the card
+    lv_obj_set_size(card, lv_pct(95), 80);
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_style(card, &style_focused, LV_STATE_FOCUSED);
+    // --- FIX: Disable the scrollbar on the card itself ---
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+
 
     lv_obj_t* icon_img = lv_image_create(card);
     if (project->icon_data) {
@@ -30,11 +33,11 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
         lv_image_set_src(icon_img, LV_SYMBOL_IMAGE);
     }
     lv_obj_set_size(icon_img, 64, 64);
-    // REMOVED: lv_image_set_zoom call, as it's not available in this LVGL version.
+
 
     lv_obj_t* text_container = lv_obj_create(card);
-    lv_obj_remove_style_all(text_container); // Make it transparent
-    lv_obj_set_flex_grow(text_container, 1); // Allow it to fill the remaining space
+    lv_obj_remove_style_all(text_container);
+    lv_obj_set_flex_grow(text_container, 1);
     lv_obj_set_height(text_container, lv_pct(100));
     lv_obj_set_flex_flow(text_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_left(text_container, 10, 0);
@@ -65,17 +68,17 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
 
     lv_obj_t* desc_label = lv_label_create(text_container);
     lv_label_set_text(desc_label, project->description);
-    lv_label_set_long_mode(desc_label, LV_LABEL_LONG_DOT); // Use dot ellipsis for short descriptions
+    lv_label_set_long_mode(desc_label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(desc_label, lv_pct(100));
 }
 
-// ... (rest of app_card.c is unchanged)
 static void card_click_event_handler(lv_event_t * e) {
     card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
     if (user_data) {
         create_app_detail_view(user_data->slug, user_data->revision);
     }
 }
+
 static void card_delete_event_handler(lv_event_t * e) {
     card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
     if (user_data) {
@@ -83,6 +86,7 @@ static void card_delete_event_handler(lv_event_t * e) {
         free(user_data);
     }
 }
+
 static void card_key_event_handler(lv_event_t * e) {
     uint32_t key = lv_indev_get_key(lv_indev_active());
     lv_obj_t * card = lv_event_get_target(e);
@@ -90,6 +94,7 @@ static void card_key_event_handler(lv_event_t * e) {
     uint32_t current_index = lv_obj_get_index(card);
     uint32_t child_count = lv_obj_get_child_cnt(parent);
     lv_obj_t* new_focus_target = NULL;
+
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
             app_home_show_previous_page();
@@ -110,6 +115,7 @@ static void card_key_event_handler(lv_event_t * e) {
         app_home_focus_search_and_start_typing(key);
         return;
     }
+
     if (new_focus_target) {
         lv_group_focus_obj(new_focus_target);
         lv_obj_scroll_to_view(new_focus_target, LV_ANIM_ON);
