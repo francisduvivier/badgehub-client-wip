@@ -91,15 +91,11 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (new_focus_target) {
         lv_group_focus_obj(new_focus_target);
-        // Ensure the newly focused item is scrolled into view
         lv_obj_scroll_to_view(new_focus_target, LV_ANIM_ON);
 
-        // If the new target is a card, check if we need to fetch more data
+        // After navigating, check if we need to update the data model
         if (lv_obj_get_parent(new_focus_target) == parent) {
-            uint32_t new_index = lv_obj_get_index(new_focus_target);
-            if (new_index >= child_count - 2) {
-                app_home_fetch_more();
-            }
+            app_home_handle_list_nav();
         }
     }
 }
