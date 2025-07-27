@@ -76,8 +76,8 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            // If we are the first card, go to the previous page.
             app_home_show_previous_page();
+            lv_event_stop_processing(e); // --- FIX: Stop event from bubbling up ---
             return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index - 1);
@@ -85,6 +85,7 @@ static void card_key_event_handler(lv_event_t * e) {
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
             app_home_show_next_page();
+            lv_event_stop_processing(e); // --- FIX: Stop event from bubbling up ---
             return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);

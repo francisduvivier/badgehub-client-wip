@@ -128,14 +128,21 @@ static void fetch_and_display_page(int offset, bool focus_last) {
     if (projects) {
         if (project_count > 0) {
             lv_obj_t* target_to_focus = NULL;
+            // --- FIX: More explicit focus logic ---
             if (focus_last) {
+                // Case 1: Navigated UP to a previous page. Focus the last item.
                 target_to_focus = lv_obj_get_child(list_container, project_count - 1);
                 lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
+            } else if (offset > 0) {
+                // Case 2: Navigated DOWN to a next page. Focus the first item.
+                target_to_focus = lv_obj_get_child(list_container, 0);
             } else {
+                // Case 3: Initial load or a search result. Focus the search bar.
                 target_to_focus = search_bar;
             }
             lv_group_focus_obj(target_to_focus);
         } else {
+             // Case 4: No results found. Focus the search bar.
              lv_group_focus_obj(search_bar);
         }
         free_applications(projects, project_count);
@@ -151,7 +158,6 @@ static void search_bar_key_event_cb(lv_event_t *e) {
         lv_group_focus_obj(first_card);
         lv_obj_scroll_to_view(first_card, LV_ANIM_ON);
     }
-    // REMOVED: The conflicting "UP" key logic has been removed from this handler.
 }
 
 static void search_timer_cb(lv_timer_t *timer) {
