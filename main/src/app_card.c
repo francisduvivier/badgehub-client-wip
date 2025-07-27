@@ -6,18 +6,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-// --- FORWARD DECLARATIONS ---
 static void card_click_event_handler(lv_event_t * e);
 static void card_delete_event_handler(lv_event_t * e);
 static void card_key_event_handler(lv_event_t * e);
-static void download_icon_timer_cb(lv_timer_t *timer);
-
-// A temporary struct to pass data to the download timer
-typedef struct {
-    lv_obj_t* card;
-    char* icon_url;
-} icon_download_data_t;
-
 
 void create_app_card(lv_obj_t* parent, const project_t* project) {
     static lv_style_t style_focused;
@@ -34,7 +25,7 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* icon_img = lv_image_create(card);
-    lv_image_set_src(icon_img, LV_SYMBOL_IMAGE); // Start with a placeholder
+    lv_image_set_src(icon_img, LV_SYMBOL_IMAGE);
     lv_obj_set_size(icon_img, 64, 64);
 
     lv_obj_t* text_container = lv_obj_create(card);
@@ -48,6 +39,9 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     if (user_data) {
         user_data->slug = strdup(project->slug);
         user_data->revision = project->revision;
+        if (project->icon_url) {
+            user_data->icon_url = strdup(project->icon_url);
+        }
     }
 
     lv_obj_set_user_data(card, user_data);
@@ -56,16 +50,6 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_add_event_cb(card, card_key_event_handler, LV_EVENT_KEY, NULL);
 
     lv_group_add_obj(lv_group_get_default(), card);
-
-    if (project->icon_url) {
-        icon_download_data_t* download_data = malloc(sizeof(icon_download_data_t));
-        if (download_data) {
-            download_data->card = card;
-            download_data->icon_url = strdup(project->icon_url);
-            lv_timer_t* timer = lv_timer_create(download_icon_timer_cb, 1, download_data);
-            lv_timer_set_repeat_count(timer, 1);
-        }
-    }
 
     static lv_style_t style_title;
     lv_style_init(&style_title);
@@ -83,43 +67,32 @@ void create_app_card(lv_obj_t* parent, const project_t* project) {
     lv_obj_set_width(desc_label, lv_pct(100));
 }
 
-static void download_icon_timer_cb(lv_timer_t *timer) {
-    // --- FIX: Use the correct API function to get user data ---
-    icon_download_data_t* download_data = (icon_download_data_t*)lv_timer_get_user_data(timer);
-    lv_obj_t* card = download_data->card;
-
-    if (!lv_obj_is_valid(card)) {
-        free(download_data->icon_url);
-        free(download_data);
-        return;
+void app_card_load_icon(lv_obj_t* card) {
+    if (!card) return;
+    card_user_data_t* user_data = lv_obj_get_user_data(card);
+    if (!user_data || !user_data->icon_url || user_data->icon_data) {
+        return; // No URL or icon already loaded
     }
 
     size_t icon_size = 0;
-    uint8_t* icon_data = download_icon_to_memory(download_data->icon_url, &icon_size);
+    uint8_t* icon_data = download_icon_to_memory(user_data->icon_url, &icon_size);
 
     if (icon_data) {
-        card_user_data_t* user_data = lv_obj_get_user_data(card);
-        if (user_data) {
-            user_data->icon_data = icon_data;
-            user_data->icon_dsc.data = icon_data;
-            user_data->icon_dsc.data_size = icon_size;
-            user_data->icon_dsc.header.cf = LV_COLOR_FORMAT_RAW;
+        user_data->icon_data = icon_data;
+        user_data->icon_dsc.data = icon_data;
+        user_data->icon_dsc.data_size = icon_size;
+        user_data->icon_dsc.header.cf = LV_COLOR_FORMAT_RAW;
 
-            lv_obj_t* icon_img = lv_obj_get_child(card, 0);
-            lv_image_set_src(icon_img, &user_data->icon_dsc);
-        } else {
-            free(icon_data);
-        }
+        lv_obj_t* icon_img = lv_obj_get_child(card, 0);
+        lv_image_set_src(icon_img, &user_data->icon_dsc);
     }
-
-    free(download_data->icon_url);
-    free(download_data);
 }
 
 static void card_delete_event_handler(lv_event_t * e) {
     card_user_data_t* user_data = (card_user_data_t*)lv_event_get_user_data(e);
     if (user_data) {
         free(user_data->slug);
+        free(user_data->icon_url);
         if (user_data->icon_data) {
             free(user_data->icon_data);
         }

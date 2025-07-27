@@ -15,8 +15,9 @@ static lv_obj_t *list_container;
 static lv_obj_t *search_bar;
 static lv_obj_t *page_indicator_label;
 static lv_timer_t *search_timer = NULL;
+static lv_timer_t *icon_loader_timer = NULL; // Timer to orchestrate icon downloads
+static int icon_loader_index = 0; // Which icon to download next
 
-// --- FIX: Store the currently displayed page data here ---
 static project_t *s_current_page_projects = NULL;
 static int s_current_page_project_count = 0;
 
@@ -31,6 +32,7 @@ static void search_bar_event_cb(lv_event_t *e);
 static void search_bar_key_event_cb(lv_event_t *e);
 static void home_view_delete_event_cb(lv_event_t *e);
 static void fetch_and_display_page(int offset, bool focus_last);
+static void icon_loader_timer_cb(lv_timer_t *timer);
 
 // --- IMPLEMENTATIONS ---
 
@@ -84,43 +86,38 @@ void app_home_show_previous_page(void) {
 
 void app_home_focus_search_and_start_typing(uint32_t key) {
     if (!search_bar) return;
-
     current_offset = 0;
     total_pages = -1;
-
     lv_textarea_set_text(search_bar, "");
     lv_group_focus_obj(search_bar);
     lv_textarea_add_char(search_bar, key);
-
     search_bar_event_cb(NULL);
 }
-
 
 static void fetch_and_display_page(int offset, bool focus_last) {
     if (is_fetching) return;
     is_fetching = true;
 
-    lv_obj_clear_flag(search_bar, LV_OBJ_FLAG_HIDDEN);
+    if (icon_loader_timer) {
+        lv_timer_del(icon_loader_timer);
+        icon_loader_timer = NULL;
+    }
 
+    lv_obj_clear_flag(search_bar, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clean(list_container);
     lv_obj_t *spinner = lv_spinner_create(list_container);
     lv_obj_center(spinner);
     lv_refr_now(NULL);
 
-    // --- FIX: Free the PREVIOUS page's data before fetching the new page ---
     if (s_current_page_projects) {
         free_applications(s_current_page_projects, s_current_page_project_count);
         s_current_page_projects = NULL;
-        s_current_page_project_count = 0;
     }
 
     const char *query = lv_textarea_get_text(search_bar);
-    // Fetch the new data and store it in our static variables
     s_current_page_projects = get_applications(&s_current_page_project_count, query, ITEMS_PER_PAGE, offset);
 
     lv_obj_clean(list_container);
-
-    // Render the list using the new, safely stored data
     create_app_list_view(list_container, s_current_page_projects, s_current_page_project_count);
 
     int current_page = (offset / ITEMS_PER_PAGE) + 1;
@@ -137,23 +134,41 @@ static void fetch_and_display_page(int offset, bool focus_last) {
         lv_label_set_text_fmt(page_indicator_label, "Page %d / ?", current_page);
     }
 
-    if (s_current_page_projects) {
-        if (s_current_page_project_count > 0) {
-            lv_obj_t* target_to_focus = NULL;
-            if (focus_last) {
-                target_to_focus = lv_obj_get_child(list_container, s_current_page_project_count - 1);
-                lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
-            } else {
-                target_to_focus = search_bar;
-            }
-            lv_group_focus_obj(target_to_focus);
+    if (s_current_page_projects && s_current_page_project_count > 0) {
+        lv_obj_t* target_to_focus = NULL;
+        if (focus_last) {
+            target_to_focus = lv_obj_get_child(list_container, s_current_page_project_count - 1);
+            lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
         } else {
-             lv_group_focus_obj(search_bar);
+            target_to_focus = search_bar;
         }
-        // REMOVED: Do NOT free the data here.
+        lv_group_focus_obj(target_to_focus);
+
+        // --- NEW: Start the sequential icon loader ---
+        icon_loader_index = 0;
+        icon_loader_timer = lv_timer_create(icon_loader_timer_cb, 10, NULL);
+    } else {
+         lv_group_focus_obj(search_bar);
     }
 
     is_fetching = false;
+}
+
+static void icon_loader_timer_cb(lv_timer_t *timer) {
+    if (is_fetching) return; // Don't load icons while fetching a new page
+
+    if (icon_loader_index >= s_current_page_project_count) {
+        lv_timer_del(icon_loader_timer); // All icons loaded for this page
+        icon_loader_timer = NULL;
+        return;
+    }
+
+    lv_obj_t* card = lv_obj_get_child(list_container, icon_loader_index);
+    if (card) {
+        app_card_load_icon(card); // Tell the card to download its icon
+    }
+
+    icon_loader_index++;
 }
 
 static void search_bar_key_event_cb(lv_event_t *e) {
@@ -184,11 +199,13 @@ static void home_view_delete_event_cb(lv_event_t *e) {
         lv_timer_del(search_timer);
         search_timer = NULL;
     }
-    // --- FIX: Free the last loaded page data when the screen is closed ---
+    if (icon_loader_timer) {
+        lv_timer_del(icon_loader_timer);
+        icon_loader_timer = NULL;
+    }
     if (s_current_page_projects) {
         free_applications(s_current_page_projects, s_current_page_project_count);
         s_current_page_projects = NULL;
-        s_current_page_project_count = 0;
     }
     search_bar = NULL;
 }
