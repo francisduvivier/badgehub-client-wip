@@ -1,6 +1,7 @@
 #include "app_card.h"
 #include "app_detail.h"
 #include "app_home.h"
+#include "app_data_manager.h" // Include the new data manager
 #include "lvgl/lvgl.h"
 #include <string.h>
 #include <stdlib.h>
@@ -76,23 +77,23 @@ static void card_key_event_handler(lv_event_t * e) {
 
     if (key == LV_KEY_UP) {
         if (current_index == 0) {
-            // If we are the first card, either go to the search bar (if visible) or previous page
-            if (lv_obj_has_flag(get_search_bar(), LV_OBJ_FLAG_HIDDEN)) {
-                app_home_show_previous_page();
-                return;
-            } else {
-                new_focus_target = get_search_bar();
-            }
+            // If on the first card, request the previous page
+            data_manager_request_previous_page();
+            return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index - 1);
         }
     } else if (key == LV_KEY_DOWN) {
         if (current_index == child_count - 1) {
-            app_home_show_next_page();
+            // If on the last card, request the next page
+            data_manager_request_next_page();
             return;
         } else {
             new_focus_target = lv_obj_get_child(parent, current_index + 1);
         }
+    } else if (key >= ' ' && key < LV_KEY_DEL) {
+        // app_home_focus_search_and_start_typing(key); // TODO
+        return;
     }
 
     if (new_focus_target) {

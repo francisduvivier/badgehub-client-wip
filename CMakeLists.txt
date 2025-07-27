@@ -37,13 +37,14 @@ add_subdirectory(cjson)
 
 
 add_executable(main
-    ${PROJECT_SOURCE_DIR}/main/src/main.c
+        ${PROJECT_SOURCE_DIR}/main/src/main.c
         main/src/badgehub_client.c
+        main/src/utils.c
+        main/src/app_data_manager.c # Add the new data manager file
         main/src/app_list.c
         main/src/app_card.c
         main/src/app_detail.c
         main/src/app_home.c
-        main/src/utils.c
 )
 
 # Add include directories and link libraries
