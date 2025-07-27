@@ -16,6 +16,10 @@ static lv_obj_t *search_bar;
 static lv_obj_t *page_indicator_label;
 static lv_timer_t *search_timer = NULL;
 
+// --- FIX: Store the currently displayed page data here ---
+static project_t *s_current_page_projects = NULL;
+static int s_current_page_project_count = 0;
+
 static int current_offset = 0;
 static bool is_fetching = false;
 static bool end_of_list_reached = false;
@@ -103,16 +107,24 @@ static void fetch_and_display_page(int offset, bool focus_last) {
     lv_obj_center(spinner);
     lv_refr_now(NULL);
 
+    // --- FIX: Free the PREVIOUS page's data before fetching the new page ---
+    if (s_current_page_projects) {
+        free_applications(s_current_page_projects, s_current_page_project_count);
+        s_current_page_projects = NULL;
+        s_current_page_project_count = 0;
+    }
+
     const char *query = lv_textarea_get_text(search_bar);
-    int project_count = 0;
-    project_t *projects = get_applications(&project_count, query, ITEMS_PER_PAGE, offset);
+    // Fetch the new data and store it in our static variables
+    s_current_page_projects = get_applications(&s_current_page_project_count, query, ITEMS_PER_PAGE, offset);
 
     lv_obj_clean(list_container);
 
-    create_app_list_view(list_container, projects, project_count);
+    // Render the list using the new, safely stored data
+    create_app_list_view(list_container, s_current_page_projects, s_current_page_project_count);
 
     int current_page = (offset / ITEMS_PER_PAGE) + 1;
-    if (project_count < ITEMS_PER_PAGE) {
+    if (s_current_page_project_count < ITEMS_PER_PAGE) {
         end_of_list_reached = true;
         total_pages = current_page;
     } else {
@@ -125,27 +137,20 @@ static void fetch_and_display_page(int offset, bool focus_last) {
         lv_label_set_text_fmt(page_indicator_label, "Page %d / ?", current_page);
     }
 
-    if (projects) {
-        if (project_count > 0) {
+    if (s_current_page_projects) {
+        if (s_current_page_project_count > 0) {
             lv_obj_t* target_to_focus = NULL;
-            // --- FIX: More explicit focus logic ---
             if (focus_last) {
-                // Case 1: Navigated UP to a previous page. Focus the last item.
-                target_to_focus = lv_obj_get_child(list_container, project_count - 1);
+                target_to_focus = lv_obj_get_child(list_container, s_current_page_project_count - 1);
                 lv_obj_scroll_to_view(target_to_focus, LV_ANIM_OFF);
-            } else if (offset > 0) {
-                // Case 2: Navigated DOWN to a next page. Focus the first item.
-                target_to_focus = lv_obj_get_child(list_container, 0);
             } else {
-                // Case 3: Initial load or a search result. Focus the search bar.
                 target_to_focus = search_bar;
             }
             lv_group_focus_obj(target_to_focus);
         } else {
-             // Case 4: No results found. Focus the search bar.
              lv_group_focus_obj(search_bar);
         }
-        free_applications(projects, project_count);
+        // REMOVED: Do NOT free the data here.
     }
 
     is_fetching = false;
@@ -178,6 +183,12 @@ static void home_view_delete_event_cb(lv_event_t *e) {
     if (search_timer) {
         lv_timer_del(search_timer);
         search_timer = NULL;
+    }
+    // --- FIX: Free the last loaded page data when the screen is closed ---
+    if (s_current_page_projects) {
+        free_applications(s_current_page_projects, s_current_page_project_count);
+        s_current_page_projects = NULL;
+        s_current_page_project_count = 0;
     }
     search_bar = NULL;
 }
