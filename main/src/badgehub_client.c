@@ -18,7 +18,7 @@ project_t *get_applications(int *project_count, const char* search_query, int li
     project_t *projects = NULL;
     char url[512];
     char base_url[256];
-    snprintf(base_url, sizeof(base_url), "%s/projects", "https://badgehub.p1m.nl/api/v3");
+    snprintf(base_url, sizeof(base_url), "%s/project-summaries", "https://badgehub.p1m.nl/api/v3");
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
     if (!curl_handle) { free(chunk.memory); return NULL; }
